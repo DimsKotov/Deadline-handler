@@ -1,0 +1,95 @@
+:root {
+  /* ===== LIGHT THEME ===== */
+
+  /* -Текстовый стек цветов- */
+  --clr-text-primary: #253017;
+  --clr-text-secondary: #69735d;
+  --clr-text-disabled: #9ca197;
+
+  /* -ui цвета- */
+  --clr-ui-text: #4aa31d;
+  --clr-ui-disabled: #e4e8df;
+  --clr-ui-surface: #ffffff;
+  --clr-ui-background:  #c4f1ae;
+  --clr-ui-logo: #0C0C0C;
+  --clr-ui-border: #000000;
+  --clr-ui-overlay: #8e8e8e99;
+
+  /* -primary- */
+  --clr-primary: #abd27a;
+  --clr-primary-hover: #deebc5;
+  --clr-primary-pressed: #508826;
+
+  /* -Семантические цвета- */
+  --clr-alarm: #e0796e;
+  --clr-error: #bf3920;
+  --clr-error-background: #f8d8d2;
+  
+
+  /* -Фонт фемили - */
+  --ff-heading:
+    'Jost', system-ui, -apple-system, 'Segoe UI', roboto, arial, sans-serif;
+  --ff-body: 'Roboto', system-ui, -apple-system, 'Segoe UI', arial, sans-serif;
+
+  /* -ширина- */
+  --fw-regular: 400;
+  --fw-medium: 500;
+
+  /* -Первый заголовок- */
+  --fs-h1: 32px;
+  --lh-h1: 40px;
+
+  /* -Второй заголовок- */
+  --fs-h2: 24px;
+  --lh-h2: 32px;
+
+  /* -Третий заголовок- */
+  --fs-h3: 20px;
+  --lh-h3: 24px;
+
+  /* -Четвертый заголовок- */
+  --fs-h4: 16px;
+  --lh-h4: 24px;
+
+  /* -Основной текст- */
+  --fs-body: 16px;
+  --lh-body: 24px;
+
+  /* -Текст для доп инфы */
+  --fs-caption: 12px;
+  --lh-caption: 16px;
+
+  /* -Обводка- */
+  --border-width: 1px;
+  --border-radius: 12px;
+}
+
+/* ===== DARK THEME ===== */
+[data-theme='dark'] {
+  --clr-text-primary: #f5f7f2;
+  --clr-text-secondary: #c3c9b8;
+  --clr-text-disabled: #7c8372;
+
+  --clr-ui-toggle: #3c4435;
+  --clr-ui-disabled: #2a2f25;
+  --clr-ui-surface: #1e231b;
+  --clr-ui-background: #141811;
+  --clr-ui-logo: #E0E0E0;
+  --clr-ui-border: #ffffff;
+  --clr-ui-overlay: #00000099;
+
+  --clr-primary: #9cd45b;
+  --clr-primary-hover: #7db43f;
+  --clr-primary-pressed: #c4f28c;
+
+  --clr-alarm: #ff8c7f;
+  --clr-error: #ff5a3d;
+
+  --clr-pastel-violet: #5a4d8a;
+  --clr-pastel-pink:   #b05a93;
+  --clr-pastel-sand:   #a88f3d;
+  --clr-pastel-sky:    #4fa3c1;
+  --clr-pastel-peach:  #c47a5a;
+  --clr-pastel-mint:   #4aa36a;
+  --clr-pastel-blue:   #4f6ecf;
+}

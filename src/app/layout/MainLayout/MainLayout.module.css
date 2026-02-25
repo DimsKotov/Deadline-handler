@@ -1,0 +1,6 @@
+.mainContainer {
+    display: flex;
+    gap: 100px;
+    padding-block-start: 100px;
+    justify-content: center;
+}

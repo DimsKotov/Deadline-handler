@@ -1,0 +1,45 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--clr-ui-background, #c4f1ae);
+  min-height: 120px;
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 10px 30px;
+}
+
+.headerImg {
+  height: 75px;
+  width: 75px;
+}
+
+.title {
+  font-weight: bold;
+  font-size: 34px;
+  color: var(--clr-ui-text, #4aa31d);
+}
+
+.buttonWrapper {
+  padding: 10px 30px;
+}
+
+.instructionButton {
+  background-color: transparent;
+  border: 2px solid var(--clr-ui-text, #4aa31d);
+  border-radius: 12px;
+  padding: 10px 10px;
+  font-size: 26px;
+  color: var(--clr-ui-text, #4aa31d);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.instructionButton:focus-visible {
+  outline: none;
+  border: 2px solid var(--clr-ui-text, #4aa31d);    
+}
