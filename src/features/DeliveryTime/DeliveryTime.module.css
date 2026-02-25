@@ -1,9 +1,10 @@
 .container {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  width: 100%; 
-  max-width: 700px; 
+  width: 100%;
+  max-width: 700px;
 }
 
 .uploadBox {
@@ -15,7 +16,7 @@
   justify-content: center;
   cursor: pointer;
   border-radius: 12px;
-  transition: background-color 0.3s;  
+  transition: background-color 0.3s;
   min-height: 200px;
 }
 
@@ -24,6 +25,14 @@
 }
 
 .error {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  left: 10%;
+  bottom: -30%;
+  min-height: 50px;
+  width: 80%;
   color: var(--clr-error, #bf3920);
   font-size: 20px;
   text-align: center;
@@ -33,7 +42,15 @@
 }
 
 .success {
-  color: var(--clr-ui-text, #4aa31d);  
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  left: 10%;
+  bottom: -30%;
+  min-height: 50px;
+  width: 80%;
+  color: var(--clr-ui-text, #4aa31d);
   font-size: 20px;
   text-align: center;
   outline: 1px solid var(--clr-ui-text, #4aa31d);

@@ -1,20 +1,37 @@
-import React from 'react';
-import styles from './FileProcessing.module.css';
+import React, { useState, useEffect } from "react";
+import styles from "./FileProcessing.module.css";
 
 interface FileProcessingProps {
-  isEnabled: boolean;
-  onExport: () => void;
+  deliveryDataReady: boolean;
+  deliveryTimeReady: boolean;
 }
 
-const FileProcessing: React.FC<FileProcessingProps> = ({ isEnabled, onExport }) => {
+const FileProcessing: React.FC<FileProcessingProps> = ({
+  deliveryDataReady,
+  deliveryTimeReady,
+}) => {
+  const [isButtonDisabled, setIsButtonDisabled] = useState(true);
+
+  useEffect(() => {
+    if (deliveryDataReady && deliveryTimeReady) {
+      setIsButtonDisabled(false);
+    } else {
+      setIsButtonDisabled(true);
+    }
+  }, [deliveryDataReady, deliveryTimeReady]);
+
+  const handleClick = () => {
+    alert("Выгрузка файла APEX начата!");
+  };
+
   return (
     <div className={styles.container}>
       <button
-        className={styles.button}
-        disabled={!isEnabled}
-        onClick={onExport}
+        className={styles.uploadButton}
+        disabled={isButtonDisabled}
+        onClick={handleClick}
       >
-        Выгрузить файл APEX
+        Выгрузка файла APEX
       </button>
     </div>
   );

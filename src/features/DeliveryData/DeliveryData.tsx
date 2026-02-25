@@ -1,25 +1,30 @@
 import React, { useRef, useState } from 'react';
 import styles from './DeliveryData.module.css';
-import * as XLSX from 'xlsx';
+import { parseExcelFile, validateDeliveryDataColumns } from '../../utils/ExcelUtils';
 
-const DeliveryData: React.FC = () => {
+interface DeliveryDataProps {
+  onSuccess: () => void;
+  onReset: () => void;
+}
+
+const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null); // состояние для имени файла
+  const [fileName, setFileName] = useState<string | null>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processFile(file);
+      await processFile(file);
     }
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
     if (file) {
-      processFile(file);
+      await processFile(file);
     }
   };
 
@@ -27,56 +32,33 @@ const DeliveryData: React.FC = () => {
     e.preventDefault();
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setError(null);
     setSuccess(null);
-    setFileName(null); // сброс имени файла при обработке
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      const data = e.target?.result;
-      if (typeof data === 'string' || data instanceof ArrayBuffer) {
-        try {
-          const workbook = XLSX.read(data, { type: typeof data === 'string' ? 'string' : 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
-
-          if (jsonData.length === 0) {
-            setError('Файл пустой или не содержит данных.');
-            resetFileInput();
-            return;
-          }
-
-          const columns = Object.keys(jsonData[0]).map(col => col.toLowerCase());
-
-          const hasCS = columns.some(col => col.includes('цс'));
-          const hasCode = columns.some(col => col.includes('код'));
-          const hasArticle = columns.some(col => col.includes('артикул'));
-
-          if (hasCS && hasCode && hasArticle) {
-            setSuccess('Файл содержит необходимые столбцы.');
-            setFileName(file.name); // сохраняем имя файла при успешной проверке
-          } else {
-            setError('Похоже данный файл не является "Данные о поставках".');
-            resetFileInput();
-          }
-        } catch (err) {
-          setError('Ошибка при чтении файла.');
-          console.error(err);
-          resetFileInput();
-        }
+    setFileName(null);
+    try {
+      const jsonData = await parseExcelFile(file);
+      if (validateDeliveryDataColumns(jsonData)) {
+        setSuccess('Загружен корректный файл.');
+        setFileName(file.name);
+        onSuccess();
+      } else {
+        setError('Похоже данный файл не является "Данные о поставках".');
+        resetFileInput();
+        onReset();
       }
-    };
-
-    reader.readAsArrayBuffer(file);
+    } catch (err) {
+      setError('Ошибка при чтении файла.');
+      resetFileInput();
+      onReset();
+    }
   };
 
   const resetFileInput = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    setFileName(null); // сброс имени файла
+    setFileName(null);
   };
 
   const handleButtonClick = () => {
@@ -91,7 +73,9 @@ const DeliveryData: React.FC = () => {
     >
       <div className={styles.uploadBox} onClick={handleButtonClick}>
         <p className={styles.dataParagraf}>
-          {fileName ? `Загружен файл: ${fileName}` : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
+          {fileName
+            ? `Загружен файл: ${fileName}`
+            : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
         </p>
         <input
           type="file"
