@@ -3,7 +3,7 @@ import styles from './DeliveryData.module.css';
 import { parseExcelFile, validateDeliveryDataColumns } from '../../utils/ExcelUtils';
 
 interface DeliveryDataProps {
-  onSuccess: () => void;
+  onSuccess: (data: any[]) => void;
   onReset: () => void;
 }
 
@@ -36,12 +36,13 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
     setError(null);
     setSuccess(null);
     setFileName(null);
+    
     try {
       const jsonData = await parseExcelFile(file);
       if (validateDeliveryDataColumns(jsonData)) {
         setSuccess('Загружен корректный файл.');
         setFileName(file.name);
-        onSuccess();
+        onSuccess(jsonData);
       } else {
         setError('Похоже данный файл не является "Данные о поставках".');
         resetFileInput();
@@ -67,11 +68,11 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
 
   return (
     <div
-      className={styles.container}
+      className={styles.dataContainer}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      <div className={styles.uploadBox} onClick={handleButtonClick}>
+      <div className={styles.dataUploadBox} onClick={handleButtonClick}>
         <p className={styles.dataParagraf}>
           {fileName
             ? `Загружен файл: ${fileName}`
@@ -85,8 +86,8 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
           onChange={handleFileChange}
         />
       </div>
-      {error && <p className={styles.error}>{error}</p>}
-      {success && <p className={styles.success}>{success}</p>}
+      {error && <p className={styles.dataError}>{error}</p>}
+      {success && <p className={styles.dataSuccess}>{success}</p>}
     </div>
   );
 };

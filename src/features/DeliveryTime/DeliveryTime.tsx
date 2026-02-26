@@ -3,7 +3,7 @@ import styles from './DeliveryTime.module.css';
 import { parseExcelFile, validateDeliveryTimeColumns } from '../../utils/ExcelUtils';
 
 interface DeliveryTimeProps {
-  onSuccess: () => void;
+  onSuccess: (data: any[]) => void;
   onReset: () => void;
 }
 
@@ -36,12 +36,13 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
     setError(null);
     setSuccess(null);
     setFileName(null);
+    
     try {
       const jsonData = await parseExcelFile(file);
       if (validateDeliveryTimeColumns(jsonData)) {
         setSuccess('Загружен корректный файл.');
         setFileName(file.name);
-        onSuccess();
+        onSuccess(jsonData);
       } else {
         setError('Похоже данный файл поставщика не содержит ключевые данные по артикулам или срокам.');
         resetFileInput();
@@ -67,12 +68,12 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
 
   return (
     <div
-      className={styles.container}
+      className={styles.timeContainer}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      <div className={styles.uploadBox} onClick={handleButtonClick}>
-        <p className={styles.dataParagraf}>
+      <div className={styles.timeUploadBox} onClick={handleButtonClick}>
+        <p className={styles.timeParagraf}>
           {fileName
             ? `Загружен файл: ${fileName}`
             : 'Перетащите или нажмите, чтобы выбрать файл со сроками поставщика'}
@@ -85,8 +86,8 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
           onChange={handleFileChange}
         />
       </div>
-      {error && <p className={styles.error}>{error}</p>}
-      {success && <p className={styles.success}>{success}</p>}
+      {error && <p className={styles.timeError}>{error}</p>}
+      {success && <p className={styles.timeSuccess}>{success}</p>}
     </div>
   );
 };

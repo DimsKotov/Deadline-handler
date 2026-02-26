@@ -1,4 +1,4 @@
-.container {
+.dataContainer {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -7,31 +7,30 @@
   max-width: 700px;
 }
 
-.uploadBox {
+.dataUploadBox {
   display: flex;
-  border: 4px dashed var(--clr-ui-background, #c4f1ae);
-  padding: 50px;
+  border: 4px dashed var(--clr-ui-background, #c4f1ae);  
   text-align: center;
-  align-items: center;
   justify-content: center;
+  align-items: center;  
   cursor: pointer;
   border-radius: 12px;
   transition: background-color 0.3s;
-  min-height: 200px;
+  min-height: 300px;
 }
 
-.uploadBox:hover {
+.dataUploadBox:hover {
   background-color: #e4fcd8;
 }
 
-.error {
+.dataError {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
   left: 10%;
-  bottom: -30%;
-  min-height: 50px;
+  bottom: -25%;
+  min-height: 60px;
   width: 80%;
   color: var(--clr-error, #bf3920);
   font-size: 20px;
@@ -41,14 +40,14 @@
   background-color: var(--clr-error-background, #f1ada1);
 }
 
-.success {
+.dataSuccess {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
   left: 10%;
-  bottom: -30%;
-  min-height: 50px;
+  bottom: -25%;
+  min-height: 60px;
   width: 80%;
   color: var(--clr-ui-text, #4aa31d);
   font-size: 20px;
