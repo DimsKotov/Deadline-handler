@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import styles from './DeliveryData.module.css';
 import { parseExcelFile, validateDeliveryDataColumns } from '../../utils/ExcelUtils';
+import Loader from '../Loader/Loader'; // Добавляем импорт Loader
 
 interface DeliveryDataProps {
   onSuccess: (data: any[]) => void;
@@ -12,6 +13,7 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // Добавляем состояние загрузки
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,7 +38,8 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
     setError(null);
     setSuccess(null);
     setFileName(null);
-    
+    setIsLoading(true); // Начинаем загрузку
+
     try {
       const jsonData = await parseExcelFile(file);
       if (validateDeliveryDataColumns(jsonData)) {
@@ -52,6 +55,8 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
       setError('Ошибка при чтении файла.');
       resetFileInput();
       onReset();
+    } finally {
+      setIsLoading(false); // Завершаем загрузку в любом случае
     }
   };
 
@@ -72,22 +77,28 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      <div className={styles.dataUploadBox} onClick={handleButtonClick}>
-        <p className={styles.dataParagraf}>
-          {fileName
-            ? `Загружен файл: ${fileName}`
-            : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
-        </p>
-        <input
-          type="file"
-          accept=".xlsx, .xls"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          onChange={handleFileChange}
-        />
-      </div>
-      {error && <p className={styles.dataError}>{error}</p>}
-      {success && <p className={styles.dataSuccess}>{success}</p>}
+      {isLoading ? (
+        <Loader /> // Показываем Loader во время загрузки
+      ) : (
+        <>
+          <div className={styles.dataUploadBox} onClick={handleButtonClick}>
+            <p className={styles.dataParagraf}>
+              {fileName
+                ? `Загружен файл: ${fileName}`
+                : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
+            </p>
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+          </div>
+          {error && <p className={styles.dataError}>{error}</p>}
+          {success && <p className={styles.dataSuccess}>{success}</p>}
+        </>
+      )}
     </div>
   );
 };

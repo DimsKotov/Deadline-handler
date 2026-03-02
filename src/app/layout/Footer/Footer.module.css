@@ -1,0 +1,8 @@
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--clr-ui-background, #c4f1ae);
+  min-height: 120px;
+  border-top: 2px solid var(--clr-ui-text, #4aa31d);  
+}

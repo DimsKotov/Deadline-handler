@@ -1,4 +1,5 @@
 .container {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -8,13 +9,31 @@
   min-width: 25%;
   min-height: 80px;
   padding: 10px 20px;
-  font-size: 20px;
+  font-size: 26px;
   background-color: #e0fcd2;
   color: var(--clr-ui-text, #4aa31d);
   border: 4px solid var(--clr-ui-text, #4aa31d);
   border-radius: 12px;
   cursor: pointer;
   transition: background-color 0.3s;
+}
+
+.loaderContainer {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  top: 20%;
+  background-color: transparent;
+  gap: 15px;
+}
+
+.uploadButton:hover {
+  background-color: #96d378;
+  color: #e0fcd2;
+  transition: background-color 0.4s;
+  transition: color 0.4s;
 }
 
 .uploadButton:disabled {

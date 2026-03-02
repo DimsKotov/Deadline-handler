@@ -82,11 +82,12 @@ export const validateDeliveryDataColumns = (jsonData: any[]): boolean => {
   const hasCS = columns.some((col) => col.includes("цс"));
   const hasCode = columns.some((col) => col.includes("код"));
   const hasArticle = columns.some((col) => col.includes("артикул"));
+  const hasManager = columns.some((col) => col.includes("менеджер узп"));
 
-  return hasCS && hasCode && hasArticle;
+  return hasCS && hasCode && hasArticle && hasManager;
 };
 
-// Валидация для "Сроков поставки"
+// Валидация для файла поставщика
 export const validateDeliveryTimeColumns = (jsonData: any[]): boolean => {
   if (jsonData.length === 0) return false;
   const columns = Object.keys(jsonData[0]).map((col) => col.toLowerCase());
@@ -95,11 +96,6 @@ export const validateDeliveryTimeColumns = (jsonData: any[]): boolean => {
     (col) => col.includes("артикул") || col.includes("код"),
   );
   const hasSrok = columns.some((col) => col.includes("срок"));
-  const hasCSColumn = columns.some((col) => col === "цс");
-
-  if (hasCSColumn) {
-    return false;
-  }
 
   return hasArticulOrCode && hasSrok;
 };

@@ -1,7 +1,11 @@
+.mainContainerWrapper {
+    min-height: 700px;    
+}
+
 .mainContainer {
     display: flex;
     gap: 100px;
     padding-block-start: 100px;
     justify-content: center;
-    padding-block-end: 150px;
+    padding-block-end: 100px;
 }

@@ -4,6 +4,8 @@
   justify-content: space-between;
   background-color: var(--clr-ui-background, #c4f1ae);
   min-height: 120px;
+  position: relative;
+  border-bottom: 2px solid var(--clr-ui-text, #4aa31d); 
 }
 
 .logoContainer {
@@ -24,6 +26,16 @@
   color: var(--clr-ui-text, #4aa31d);
 }
 
+.instructionUl {
+  display: flex;
+  flex-direction: column;
+  row-gap: 20px;
+  color: var(--clr-ui-text, #4aa31d);
+  font-size: 28px;
+  letter-spacing: 0.03em;
+
+}
+
 .buttonWrapper {
   padding: 10px 30px;
 }
@@ -32,14 +44,43 @@
   background-color: transparent;
   border: 2px solid var(--clr-ui-text, #4aa31d);
   border-radius: 12px;
-  padding: 10px 10px;
+  padding: 10px 40px;
   font-size: 26px;
   color: var(--clr-ui-text, #4aa31d);
   cursor: pointer;
   transition: all 0.2s ease-in-out;
 }
 
+.instructionButton:hover {
+  background-color: #e4fcd8;
+  transition: all 0.2s ease-in-out;
+}
+
 .instructionButton:focus-visible {
   outline: none;
-  border: 2px solid var(--clr-ui-text, #4aa31d);    
+  border: 2px solid var(--clr-ui-text, #4aa31d);
+}
+
+.instructionModal {
+  position: absolute;  
+  right: 20px;
+  top: 95px;
+  background-color: #e4fcd8;
+  border: 2px solid var(--clr-ui-text, #4aa31d);
+  border-radius: 12px;
+  padding: 20px;
+  z-index: 2;  
+  max-width: 50vw;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  pointer-events: none; /* отключение взаимодействия, когда скрыто */
+}
+
+.instructionModal.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto; /* включение взаимодействия при показе */
 }
