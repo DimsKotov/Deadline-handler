@@ -52,7 +52,7 @@ const Header = () => {
       <div className={styles.logoContainer}>
         <img
           className={styles.headerImg}
-          src="/src/assets/images/icon-excel.png"
+          src={`${import.meta.env.BASE_URL}icon-excel.png`}
           alt="Excel Icon"
         />
         <span className={styles.title}>Обработчик сроков готовности</span>
@@ -70,9 +70,8 @@ const Header = () => {
       {showInstruction && (
         <div
           ref={instructionRef}
-          className={`${styles.instructionModal} ${
-            animateInstruction ? styles.show : ""
-          }`}
+          className={`${styles.instructionModal} ${animateInstruction ? styles.show : ""
+            }`}
         >
           <ul className={styles.instructionUl}>
             <li>
