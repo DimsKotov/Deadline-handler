@@ -1,0 +1,13 @@
+.erroWrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--clr-error, #bf3920);
+  color: var(--clr-error, #bf3920);
+  background-color: var(--clr-error-background, #f1ada1);
+  min-height: 60px;
+  min-width: 30%;
+  border-radius: 8px;
+  font-size: 20px;
+  padding: 20px;
+}

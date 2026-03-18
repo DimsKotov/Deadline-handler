@@ -1,335 +1,209 @@
-import React, { useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import React, { useEffect, useRef, useState } from 'react';
+import ExclusionFileSE from './ExclusionFileSE'; // Импорт компонента для особых правил
+import ExclusionFileDKC from './ExclusionFileDKC';
+import ExclusionFileBetterman from './ExclusionFileBetterman';
+import { downloadBlob, createExcelBlob } from '../../utils/ExcelUtils';
+import { buildStandardAllData } from './FileFormationService';
 
 interface FileFormationTwoProps {
   deliveryTimeData: any[];
   deliveryData: any[];
+  deliveryTimeFileName?: string | null;
+  deliveryTimeSources?: Array<{ name: string; data: any[] }>;
   downloadTrigger: number;
   onProcessingComplete?: (success: boolean) => void;
+  splitFilesEnabled?: boolean;
 }
 
 const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
   deliveryTimeData,
   deliveryData,
+  deliveryTimeFileName = null,
+  deliveryTimeSources = [],
   downloadTrigger,
-  onProcessingComplete
+  onProcessingComplete,
+  splitFilesEnabled = true,
 }) => {
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
+  const [useExclusionFile, setUseExclusionFile] = useState(false);
+  const [useDkcExclusionFile, setUseDkcExclusionFile] = useState(false);
+  const [useBettermanExclusionFile, setUseBettermanExclusionFile] = useState(false);
+  const [moscowColumnFound, setMoscowColumnFound] = useState(false);
+  const [ekaterinburgColumnFound, setEkaterinburgColumnFound] = useState(false);
+
+  // Функция для нормализации названия столбца
+  const normalizeColumnName = (name: string): string => {
+    if (!name) return '';
+    return name.toString().trim().toLowerCase();
+  };
+
+  // Функция для проверки наличия особых столбцов
+  const checkForSpecialColumns = (data: any[]): { moscow: boolean, ekaterinburg: boolean } => {
+    if (!data || data.length === 0) {
+      return { moscow: false, ekaterinburg: false };
+    }
+    
+    const firstRow = data[0];
+    const rowKeys = Object.keys(firstRow);
+    
+    let moscowFound = false;
+    let ekaterinburgFound = false;
+    
+    // Проверяем наличие столбцов Москвы и Екатеринбурга
+    for (const key of rowKeys) {
+      const normalizedKey = normalizeColumnName(key);
+      
+      // Проверяем столбец Москвы
+      if (normalizedKey.includes('москва') && 
+          (normalizedKey.includes('срок') || normalizedKey.includes('отгрузк'))) {
+        moscowFound = true;
+      }
+      
+      // Проверяем столбец Екатеринбурга
+      if ((normalizedKey.includes('екатеринбург') || normalizedKey.includes('екб')) && 
+          (normalizedKey.includes('срок') || normalizedKey.includes('отгрузк'))) {
+        ekaterinburgFound = true;
+      }
+      
+      // Проверяем точные совпадения
+      if (normalizedKey === normalizeColumnName("Срок готовности к отгрузке со склада Москва")) {
+        moscowFound = true;
+      }
+      
+      if (normalizedKey === normalizeColumnName("Срок готовности к отгрузке со склада Екатеринбург")) {
+        ekaterinburgFound = true;
+      }
+    }
+    
+    return { moscow: moscowFound, ekaterinburg: ekaterinburgFound };
+  };
 
   useEffect(() => {
     if (downloadTrigger !== lastTriggerRef.current) {
       hasDownloadedRef.current = false;
       lastTriggerRef.current = downloadTrigger;
+      setUseExclusionFile(false);
+      setUseDkcExclusionFile(false);
+      setUseBettermanExclusionFile(false);
     }
     
-    if (deliveryTimeData && deliveryTimeData.length > 0 &&
+    const hasTimeData =
+      (deliveryTimeData && deliveryTimeData.length > 0) ||
+      (deliveryTimeSources && deliveryTimeSources.some((s) => s.data && s.data.length > 0));
+
+    if (hasTimeData &&
         deliveryData && deliveryData.length > 0 &&
         !hasDownloadedRef.current) {
-      hasDownloadedRef.current = true;
-      setTimeout(() => {
-        handleDownload();
-      }, 100);
-    }
-  }, [deliveryTimeData, deliveryData, downloadTrigger]);
 
-  const normalizeColumnName = (name: string): string => {
-    return name?.toString().replace(/\s+/g, '').toLowerCase() || '';
-  };
-
-  const findProcessingColumnInDeliveryTime = (row: any): string | null => {
-    const possibleColumnNames = [
-      "Срок",
-      "Срок производства",
-      "Срок изготовления",
-      "Срок поставки",
-      "Срок выполнения",
-      "Сроки",
-      "Сроки производства",
-      "Сроки изготовления",
-      "Сроки поставки",
-      "Сроки выполнения",
-      "Время производства",
-      "Время изготовления",
-      "Время поставки"
-    ];
-    
-    const normalizedRowKeys = Object.keys(row).map(key => normalizeColumnName(key));
-    for (const columnName of possibleColumnNames) {
-      const normalizedColumnName = normalizeColumnName(columnName);
-      const index = normalizedRowKeys.indexOf(normalizedColumnName);
-      if (index !== -1) {
-        return Object.keys(row)[index];
+      // DKC исключение по имени файла из DeliveryTime
+      const lowerName = (deliveryTimeFileName || "").toLowerCase();
+      if (
+        lowerName.includes("dkc maga del 1100".toLowerCase()) ||
+        lowerName.includes("dkc maga del 1200".toLowerCase())
+      ) {
+        console.log("Обнаружен DKC файл. Запускаем ExclusionFileDKC");
+        setUseDkcExclusionFile(true);
+        hasDownloadedRef.current = true;
+        return;
       }
-    }
-    
-    for (let i = 0; i < normalizedRowKeys.length; i++) {
-      const normalizedKey = normalizedRowKeys[i];
-      if (normalizedKey.includes('срок') ||
-          normalizedKey.includes('production') ||
-          normalizedKey.includes('manufacturing') ||
-          normalizedKey.includes('delivery') ||
-          normalizedKey.includes('lead') ||
-          normalizedKey.includes('time') ||
-          normalizedKey.includes('term') ||
-          normalizedKey.includes('время')) {
-        return Object.keys(row)[i];
+
+      // Betterman исключение по имени файла из DeliveryTime
+      if (lowerName.includes("betterman") || lowerName.includes("беттерман")) {
+        console.log("Обнаружен Betterman файл. Запускаем ExclusionFileBetterman");
+        setUseBettermanExclusionFile(true);
+        hasDownloadedRef.current = true;
+        return;
       }
-    }
-    return null;
-  };
-
-  const findArticleColumn = (row: any): string | null => {
-    const possibleColumnNames = [
-      "Артикул",
-      "Артикул товара",
-      "Артикул продукции",
-      "Артикул изделия",
-      "Артикул позиции",
-      "Article",
-      "Article number",
-      "Product article",
-      "Item article",
-      "SKU",
-      "Код товара",
-      "Код продукции",
-      "Код изделия",
-      "Код позиции"
-    ];
-    
-    const normalizedRowKeys = Object.keys(row).map(key => normalizeColumnName(key));
-    for (const columnName of possibleColumnNames) {
-      const normalizedColumnName = normalizeColumnName(columnName);
-      const index = normalizedRowKeys.indexOf(normalizedColumnName);
-      if (index !== -1) {
-        return Object.keys(row)[index];
-      }
-    }
-    
-    for (let i = 0; i < normalizedRowKeys.length; i++) {
-      const normalizedKey = normalizedRowKeys[i];
-      if (normalizedKey.includes('артикул') ||
-          normalizedKey.includes('article') ||
-          normalizedKey.includes('sku') ||
-          normalizedKey.includes('кодтовара') ||
-          normalizedKey.includes('кодпродукции') ||
-          normalizedKey.includes('кодизделия') ||
-          normalizedKey.includes('кодпозиции')) {
-        return Object.keys(row)[i];
-      }
-    }
-    return null;
-  };
-
-  const findCodeColumnInDeliveryData = (row: any): string | null => {
-    const possibleColumnNames = ["Код"];
-    const normalizedRowKeys = Object.keys(row).map(key => normalizeColumnName(key));
-    
-    for (const columnName of possibleColumnNames) {
-      const normalizedColumnName = normalizeColumnName(columnName);
-      const index = normalizedRowKeys.indexOf(normalizedColumnName);
-      if (index !== -1) {
-        return Object.keys(row)[index];
-      }
-    }
-    
-    for (let i = 0; i < normalizedRowKeys.length; i++) {
-      const normalizedKey = normalizedRowKeys[i];
-      if (normalizedKey.includes('код') ||
-          normalizedKey.includes('code') ||
-          normalizedKey.includes('номер') ||
-          normalizedKey.includes('number')) {
-        return Object.keys(row)[i];
-      }
-    }
-    return null;
-  };
-
-  const processProcessingValue = (value: any): string => {
-    if (value === null || value === undefined || value === '') {
-      return '!!!';
-    }
-    const strValue = value.toString().trim();
-    if (strValue === '!!!') {
-      return '!!!';
-    }
-    const numValue = parseFloat(strValue.replace(',', '.'));
-    if (isNaN(numValue) || numValue === 0) {
-      return '!!!';
-    }
-    return strValue;
-  };
-
-  const findMatchingData = (timeRow: any): {
-    code: string | null;
-    processingValue: string | null;
-    hasMatch: boolean;
-  } => {
-    if (!deliveryData || deliveryData.length === 0) {
-      return { code: null, processingValue: null, hasMatch: false };
-    }
-    
-    const timeCode = timeRow["Код"] ?? "";
-    if (!timeCode) {
-      return { code: null, processingValue: null, hasMatch: false };
-    }
-    
-    const firstRow = deliveryData[0];
-    const articleColumn = findArticleColumn(firstRow);
-    if (!articleColumn) {
-      return { code: null, processingValue: null, hasMatch: false };
-    }
-    
-    const codeColumn = findCodeColumnInDeliveryData(firstRow);
-    if (!codeColumn) {
-      return { code: null, processingValue: null, hasMatch: false };
-    }
-    
-    for (const dataRow of deliveryData) {
-      const articleValue = dataRow[articleColumn];
-      if (articleValue !== null && articleValue !== undefined &&
-          articleValue.toString().trim() === timeCode.toString().trim()) {
-        const timeProcessingColumn = findProcessingColumnInDeliveryTime(timeRow);
-        let processingValue = '!!!';
-        if (timeProcessingColumn) {
-          processingValue = processProcessingValue(timeRow[timeProcessingColumn]);
-        }
-        return {
-          code: dataRow[codeColumn]?.toString() || "",
-          processingValue,
-          hasMatch: true
-        };
-      }
-    }
-    return { code: null, processingValue: null, hasMatch: false };
-  };
-
-  const createWorkbookFromData = (data: any[], partNumber?: number): Blob => {
-    const headers = [
-      "ЦС",
-      "Код",
-      "Тип",
-      "Организация",
-      "Предварительная обработка",
-      "Обработка",
-      "Заключительная обработка",
-      "Статус",
-      "Сообщение"
-    ];
-
-    const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Импортированные данные");
-    
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    return new Blob([excelBuffer], { type: 'application/octet-stream' });
-  };
-
-  const downloadFile = (blob: Blob, fileName: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      try {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        
-        link.onload = () => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          resolve(true);
-        };
-        
-        link.onerror = () => {
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          resolve(false);
-        };
-        
-        document.body.appendChild(link);
-        link.click();
-        
-        setTimeout(() => {
-          if (document.body.contains(link)) {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            resolve(true);
-          }
-        }, 100);
-      } catch (error) {
-        console.error('Ошибка при скачивании файла:', error);
-        resolve(false);
-      }
-    });
-  };
-
-  const handleDownload = async () => {
-    try {
-      const csValues = ["R01", "R31", "R77", "R04", "R02", "R29", "R19", "V30"];
-      const allData = [];
       
-      for (let copyIndex = 0; copyIndex < 8; copyIndex++) {
-        const csValue = csValues[copyIndex];
-        const filteredData = deliveryTimeData.filter(timeRow => {
-          const matchResult = findMatchingData(timeRow);
-          return matchResult.hasMatch;
-        });
-        
-        const copyData = filteredData.map(timeRow => {
-          const matchResult = findMatchingData(timeRow);
-          return {
-            "ЦС": csValue,
-            "Код": matchResult.code || "",
-            "Тип": "",
-            "Организация": "",
-            "Предварительная обработка": "",
-            "Обработка": matchResult.processingValue || "!!!",
-            "Заключительная обработка": "",
-            "Статус": "",
-            "Сообщение": ""
-          };
-        });
-        allData.push(...copyData);
+      // Проверяем наличие особых столбцов
+      const specialColumns = checkForSpecialColumns(deliveryTimeData);
+      setMoscowColumnFound(specialColumns.moscow);
+      setEkaterinburgColumnFound(specialColumns.ekaterinburg);
+      
+      console.log('Проверка особых столбцов:', {
+        moscow: specialColumns.moscow,
+        ekaterinburg: specialColumns.ekaterinburg,
+        deliveryTimeRows: deliveryTimeData.length,
+        deliveryDataRows: deliveryData.length
+      });
+      
+      // Если найден хотя бы один особый столбец, используем ExclusionFileSE
+      if (specialColumns.moscow || specialColumns.ekaterinburg) {
+        console.log('Обнаружены особые столбцы. Запускаем ExclusionFileSE');
+        setUseExclusionFile(true);
+        hasDownloadedRef.current = true;
+      } else {
+        console.log('Особые столбцы не обнаружены. Используем стандартную обработку');
+        hasDownloadedRef.current = true;
+        setTimeout(() => {
+          handleStandardDownload();
+        }, 100);
       }
+    }
+  }, [deliveryTimeData, deliveryTimeSources, deliveryData, downloadTrigger, deliveryTimeFileName]);
 
+  const EXCEL_HEADERS = [
+    "ЦС",
+    "Код",
+    "Тип",
+    "Организация",
+    "Предварительная обработка",
+    "Обработка",
+    "Заключительная обработка",
+    "Статус",
+    "Сообщение",
+  ];
+
+  // Стандартная функция обработки (оригинальная логика)
+  const handleStandardDownload = async () => {
+    try {
+      console.time('FileFormationTwo Processing');
+      
+      // Создаем все данные через сервис
+      const allData = buildStandardAllData(deliveryTimeData, deliveryData);
+      
       if (allData.length === 0) {
-        console.log("Нет данных для формирования файла (не найдено совпадений артикулов)");
+        console.log("Нет данных для формирования файла");
         if (onProcessingComplete) {
           onProcessingComplete(false);
         }
         return;
       }
-
-      const MAX_ROWS = 49900;
-      const totalRows = allData.length;
       
-      if (totalRows <= MAX_ROWS) {
-        // Если строк меньше или равно лимиту - скачиваем один файл
-        const blob = createWorkbookFromData(allData);
-        const success = await downloadFile(blob, 'Файл для загрузки APEX.xlsx');
+      const totalRows = allData.length;
+      console.log(`Сформировано ${totalRows} строк данных`);
+      
+      if (!splitFilesEnabled) {
+        // РЕЖИМ "НЕ РАЗБИВАТЬ ФАЙЛ" - создаем один файл
+        const blob = createExcelBlob(allData, EXCEL_HEADERS, "Импортированные данные");
+        const success = await downloadBlob(blob, 'Файл для загрузки APEX.xlsx');
+        
         if (onProcessingComplete) {
           onProcessingComplete(success);
         }
       } else {
-        // Если строк больше лимита - разбиваем на несколько файлов
-        const totalParts = Math.ceil(totalRows / MAX_ROWS);
+        // РЕЖИМ "РАЗБИВАТЬ ФАЙЛЫ" - стандартная логика (9990 строк на файл)
+        const MAX_ROWS = 9990;
+        const totalParts = Math.ceil(allData.length / MAX_ROWS);
         let allDownloadsSuccessful = true;
         
         for (let part = 1; part <= totalParts; part++) {
           const startIndex = (part - 1) * MAX_ROWS;
-          const endIndex = Math.min(part * MAX_ROWS, totalRows);
+          const endIndex = Math.min(part * MAX_ROWS, allData.length);
           const partData = allData.slice(startIndex, endIndex);
           
-          const blob = createWorkbookFromData(partData, part);
+          const blob = createExcelBlob(partData, EXCEL_HEADERS, "Импортированные данные");
           const fileName = `Файл для загрузки APEX (часть ${part} из ${totalParts}).xlsx`;
-          const success = await downloadFile(blob, fileName);
           
+          const success = await downloadBlob(blob, fileName);
           if (!success) {
             allDownloadsSuccessful = false;
           }
           
-          // Небольшая задержка между скачиваниями файлов
+          // Задержка между файлами
           if (part < totalParts) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
         
@@ -337,6 +211,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
           onProcessingComplete(allDownloadsSuccessful);
         }
       }
+      
+      console.timeEnd('FileFormationTwo Processing');
     } catch (error) {
       console.error('Ошибка при формировании файла:', error);
       if (onProcessingComplete) {
@@ -345,6 +221,48 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
     }
   };
 
+  // Если нужно использовать ExclusionFileSE, рендерим его
+  if (useDkcExclusionFile) {
+    return (
+      <ExclusionFileDKC
+        deliveryTimeData={deliveryTimeData}
+        deliveryData={deliveryData}
+        deliveryTimeFileName={deliveryTimeFileName}
+        deliveryTimeSources={deliveryTimeSources}
+        downloadTrigger={downloadTrigger}
+        onProcessingComplete={onProcessingComplete}
+        splitFilesEnabled={splitFilesEnabled}
+      />
+    );
+  }
+
+  if (useBettermanExclusionFile) {
+    return (
+      <ExclusionFileBetterman
+        deliveryTimeData={deliveryTimeData}
+        deliveryData={deliveryData}
+        downloadTrigger={downloadTrigger}
+        onProcessingComplete={onProcessingComplete}
+        splitFilesEnabled={splitFilesEnabled}
+      />
+    );
+  }
+
+  if (useExclusionFile) {
+    return (
+      <ExclusionFileSE
+        deliveryTimeData={deliveryTimeData}
+        deliveryData={deliveryData}
+        downloadTrigger={downloadTrigger}
+        onProcessingComplete={onProcessingComplete}
+        splitFilesEnabled={splitFilesEnabled}
+        moscowColumnFound={moscowColumnFound}
+        ekaterinburgColumnFound={ekaterinburgColumnFound}
+      />
+    );
+  }
+
+  // Иначе рендерим null (стандартная обработка уже запущена через useEffect)
   return null;
 };
 

@@ -4,7 +4,7 @@ const Footer = () => {
   return (
     <footer className={styles.footer}>
       <div>
-        <h4>
+        <h4 className={styles.footerTitle}>
           Разработал: Котов Дмитрий
         </h4>
       </div>

@@ -1,11 +1,23 @@
 .mainContainerWrapper {
-    min-height: 700px;    
+    min-height: 720px;    
 }
 
 .mainContainer {
     display: flex;
     gap: 100px;
-    padding-block-start: 100px;
+    padding-block-start: 40px;
     justify-content: center;
     padding-block-end: 100px;
+}
+
+.errorHandler {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.divisionSwitchWrapper {
+    display: flex;
+    justify-content: center;
+    padding-block-start: 20px;
 }

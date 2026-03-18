@@ -6,3 +6,9 @@
   min-height: 120px;
   border-top: 2px solid var(--clr-ui-text, #4aa31d);  
 }
+
+.footerTitle {
+  padding-inline-start: 20px;
+  font-size: 22px;
+  color: var(--clr-ui-text, #4aa31d);
+}

@@ -30,7 +30,7 @@
   display: flex;
   flex-direction: column;
   row-gap: 20px;
-  color: var(--clr-ui-text, #4aa31d);
+  color: #3b741f;
   font-size: 28px;
   letter-spacing: 0.03em;
 

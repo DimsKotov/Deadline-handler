@@ -1,0 +1,129 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background-color: var(--clr-ui-background, #c4f1ae);
+  border-radius: 12px;
+  border: 2px solid var(--clr-ui-text, #4aa31d);
+  transition: all 0.3s ease;
+  gap: 20px;
+  min-width: 600px;
+}
+
+.labelContainer {
+  display: flex;
+  flex-direction: column;  
+}
+
+.label {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--clr-ui-text, #4aa31d);
+  }
+
+.description {
+  font-size: 18px;
+  color: var(--clr-ui-text, #4aa31d);  
+}
+
+.switch {
+  position: relative;
+  width: 60px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+
+.switchTrack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+.switch.enabled .switchTrack {
+  background-color: var(--clr-ui-text, #4aa31d);
+   outline: 2px solid  #418321;
+}
+
+.switch.disabled .switchTrack {
+  background-color:  #a3a3a2;
+  outline: 2px solid  #6d6d6d;;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.switch.enabled .switchThumb {
+  transform: translateX(32px);
+}
+
+.switch.disabled .switchThumb {
+  transform: translateX(4px);
+}
+
+/* Анимация при переключении */
+.switch.enabled .switchTrack {
+  animation: pulseGreen 0.3s ease;
+}
+
+.switch.disabled .switchTrack {
+  animation: pulseGray 0.3s ease;
+}
+
+@keyframes pulseGreen {
+  0% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  }
+}
+
+@keyframes pulseGray {
+  0% {
+    box-shadow: 0 0 0 0 rgba(108, 117, 125, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(108, 117, 125, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(108, 117, 125, 0);
+  }
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .labelContainer {
+    margin-right: 0;
+    margin-bottom: 12px;
+  }
+
+  .switch {
+    align-self: flex-end;
+  }
+}
