@@ -209,7 +209,7 @@ function MainLayout() {
       <div>
         <ProcessingButton
           label="Сформировать файл APEX"
-          nsiLabel="Сформировать файл для НСИ"
+          nsiLabel="Сформировать файл НСИ"
           onClick={handleButtonClick}
           disabled={!isDeliveryTimeLoaded}
           deliveryDataLoaded={deliveryDataReady}
