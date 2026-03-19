@@ -156,39 +156,38 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {isLoading ? (
-        <Loader /> // Показываем Loader во время загрузки
-      ) : (
-        <>
-          <div className={styles.timeUploadBox} onClick={handleButtonClick}>
-            {fileName && (
-              <button
-                type="button"
-                className={styles.clearButton}
-                onClick={handleClear}
-                aria-label="Очистить загруженные файлы"
-              >
-                ×
-              </button>
-            )}
-            <p className={styles.timeParagraf}>
-              {fileName
-                ? `Загружен файл: ${fileName}`
-                : 'Перетащите или нажмите, чтобы выбрать файл со сроками поставщика'}
-            </p>
-            <input
-              type="file"
-              accept=".xlsx, .xls"
-              multiple
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
+      <div className={styles.timeUploadBox} onClick={handleButtonClick}>
+        {fileName && !isLoading && (
+          <button
+            type="button"
+            className={styles.clearButton}
+            onClick={handleClear}
+            aria-label="Очистить загруженные файлы"
+          >
+            ×
+          </button>
+        )}
+        <p className={styles.timeParagraf}>
+          {fileName
+            ? `Загружен файл: ${fileName}`
+            : 'Перетащите или нажмите, чтобы выбрать файл со сроками поставщика'}
+        </p>
+        <input
+          type="file"
+          accept=".xlsx, .xls"
+          multiple
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        {isLoading && (
+          <div className={styles.loaderOverlay}>
+            <Loader />
           </div>
-          {error && <p className={styles.timeError}>{error}</p>}
-          {success && <p className={styles.timeSuccess}>{success}</p>}
-        </>
-      )}
+        )}
+      </div>
+      {error && <p className={styles.timeError}>{error}</p>}
+      {success && <p className={styles.timeSuccess}>{success}</p>}
     </div>
   );
 };

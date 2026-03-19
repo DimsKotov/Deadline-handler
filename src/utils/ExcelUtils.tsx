@@ -90,140 +90,135 @@ export const createExcelBlob = (
   });
 };
 
-export const parseExcelFile = (
+const parseWorkbookToJson = (
+  workbook: XLSX.WorkBook,
+  options?: { preferredSheetName?: string },
+): any[] => {
+  const requestedSheetName = options?.preferredSheetName;
+  const defaultDkcSheetName = "Склад ДКС";
+
+  const sheetName =
+    (requestedSheetName &&
+      workbook.SheetNames.includes(requestedSheetName) &&
+      requestedSheetName) ||
+    (workbook.SheetNames.includes(defaultDkcSheetName) &&
+      defaultDkcSheetName) ||
+    workbook.SheetNames[0];
+
+  const worksheet = workbook.Sheets[sheetName];
+  const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+
+  let headerRowIndex = -1;
+  const keywords = ["артикул", "код", "цс", "срок", "категор"];
+  let bestScore = 0;
+
+  for (let row = range.s.r; row <= range.e.r; row++) {
+    let rowScore = 0;
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = worksheet[cellAddress];
+      if (cell && cell.v !== undefined && cell.v !== null && cell.v !== "") {
+        const cellValue = String(cell.v).trim().toLowerCase();
+        if (keywords.some((keyword) => cellValue.includes(keyword))) {
+          rowScore++;
+        }
+      }
+    }
+    if (rowScore > bestScore) {
+      bestScore = rowScore;
+      headerRowIndex = row;
+    }
+  }
+
+  if (headerRowIndex === -1 || bestScore === 0) {
+    throw new Error("Заголовки не найдены.");
+  }
+
+  const headers: string[] = [];
+  for (let col = range.s.c; col <= range.e.c; col++) {
+    const cellAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: col });
+    const cell = worksheet[cellAddress];
+    headers[col] = cell && cell.v !== undefined ? String(cell.v) : `Column_${col + 1}`;
+  }
+
+  const jsonData: any[] = [];
+  for (let row = headerRowIndex + 1; row <= range.e.r; row++) {
+    const rowData: any = {};
+    let hasData = false;
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const header = headers[col];
+      if (!header) continue;
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = worksheet[cellAddress];
+      if (cell && cell.v !== undefined && cell.v !== null && cell.v !== "") {
+        rowData[header] = cell.v;
+        hasData = true;
+      } else {
+        rowData[header] = null;
+      }
+    }
+    if (hasData) jsonData.push(rowData);
+  }
+  return jsonData;
+};
+
+const parseExcelFileInMainThread = async (
   file: File,
   options?: { preferredSheetName?: string },
 ): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = e.target?.result;
-      if (typeof data === "string" || data instanceof ArrayBuffer) {
-        try {
-          const workbook = XLSX.read(data, {
-            type: typeof data === "string" ? "string" : "array",
-          });
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: "array" });
+  return parseWorkbookToJson(workbook, options);
+};
 
-          // Выбор листа:
-          // - если передан preferredSheetName и он есть в книге — используем его
-          // - иначе если есть лист "Склад ДКС" — используем его (исторически для DKC)
-          // - иначе используем первый лист
-          const requestedSheetName = options?.preferredSheetName;
-          const defaultDkcSheetName = "Склад ДКС";
+export const parseExcelFile = async (
+  file: File,
+  options?: { preferredSheetName?: string },
+): Promise<any[]> => {
+  const canUseWorker = typeof Worker !== "undefined";
+  if (!canUseWorker) {
+    return parseExcelFileInMainThread(file, options);
+  }
 
-          const sheetName =
-            (requestedSheetName &&
-              workbook.SheetNames.includes(requestedSheetName) &&
-              requestedSheetName) ||
-            (workbook.SheetNames.includes(defaultDkcSheetName) &&
-              defaultDkcSheetName) ||
-            workbook.SheetNames[0];
+  try {
+    const worker = new Worker(
+      new URL("../workers/excelParser.worker.ts", import.meta.url),
+      { type: "module" },
+    );
 
-          const worksheet = workbook.Sheets[sheetName];
+    const buffer = await file.arrayBuffer();
 
-          // Получаем диапазон ячеек
-          const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+    return await new Promise<any[]>((resolve, reject) => {
+      const cleanup = () => worker.terminate();
 
-          // Ищем строку с заголовками
-          let headerRowIndex = -1;
-          const keywords = ["артикул", "код", "цс", "срок", "категор"];
-
-          // Вместо первого совпадения берём строку с максимальным числом ключевых попаданий,
-          // что лучше работает для "сложных" файлов (данные выше заголовка, разделители и т.п.)
-          let bestScore = 0;
-
-          for (let row = range.s.r; row <= range.e.r; row++) {
-            let rowScore = 0;
-
-            for (let col = range.s.c; col <= range.e.c; col++) {
-              const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-              const cell = worksheet[cellAddress];
-
-              if (
-                cell &&
-                cell.v !== undefined &&
-                cell.v !== null &&
-                cell.v !== ""
-              ) {
-                const cellValue = String(cell.v).trim().toLowerCase();
-                if (keywords.some((keyword) => cellValue.includes(keyword))) {
-                  rowScore++;
-                }
-              }
-            }
-
-            if (rowScore > bestScore) {
-              bestScore = rowScore;
-              headerRowIndex = row;
-            }
-          }
-
-          if (headerRowIndex === -1 || bestScore === 0) {
-            reject(new Error("Заголовки не найдены."));
-            return;
-          }
-
-          // Собираем заголовки из всех столбцов, даже пустых
-          const headers: string[] = [];
-          for (let col = range.s.c; col <= range.e.c; col++) {
-            const cellAddress = XLSX.utils.encode_cell({
-              r: headerRowIndex,
-              c: col,
-            });
-            const cell = worksheet[cellAddress];
-            const header =
-              cell && cell.v !== undefined
-                ? String(cell.v)
-                : `Column_${col + 1}`;
-            headers[col] = header;
-          }
-
-          // Собираем данные, начиная со строки после заголовков
-          const jsonData: any[] = [];
-
-          for (let row = headerRowIndex + 1; row <= range.e.r; row++) {
-            const rowData: any = {};
-            let hasData = false;
-
-            for (let col = range.s.c; col <= range.e.c; col++) {
-              const header = headers[col];
-              if (header) {
-                const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
-                const cell = worksheet[cellAddress];
-
-                if (
-                  cell &&
-                  cell.v !== undefined &&
-                  cell.v !== null &&
-                  cell.v !== ""
-                ) {
-                  rowData[header] = cell.v;
-                  hasData = true;
-                } else {
-                  // Даже для пустых ячеек добавляем поле
-                  rowData[header] = null;
-                }
-              }
-            }
-
-            // Добавляем строку только если в ней есть данные
-            if (hasData) {
-              jsonData.push(rowData);
-            }
-          }
-
-          resolve(jsonData);
-        } catch (err) {
-          console.error("Ошибка при парсинге Excel:", err);
-          reject(new Error("Ошибка при чтении файла."));
+      worker.onmessage = (event: MessageEvent) => {
+        const payload = event.data as
+          | { success: true; data: any[] }
+          | { success: false; error?: string };
+        cleanup();
+        if (payload?.success) {
+          resolve(payload.data);
+        } else {
+          reject(new Error(payload?.error || "Ошибка при чтении файла."));
         }
-      } else {
-        reject(new Error("Неверный формат данных файла."));
-      }
-    };
-    reader.onerror = () => reject(new Error("Ошибка при чтении файла."));
-    reader.readAsArrayBuffer(file);
-  });
+      };
+
+      worker.onerror = () => {
+        cleanup();
+        reject(new Error("Ошибка при чтении файла."));
+      };
+
+      worker.postMessage(
+        {
+          buffer,
+          preferredSheetName: options?.preferredSheetName,
+        },
+        [buffer],
+      );
+    });
+  } catch {
+    return parseExcelFileInMainThread(file, options);
+  }
 };
 
 // Валидация для "Данных о поставках"

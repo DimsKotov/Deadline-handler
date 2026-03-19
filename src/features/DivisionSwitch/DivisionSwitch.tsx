@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './DivisionSwitch.module.css';
 
 interface DivisionSwitchProps {
@@ -37,6 +37,11 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
   className = ''
 }) => {
   const [enabled, setEnabled] = useState<boolean>(isEnabled);
+  const [splitRowsInput, setSplitRowsInput] = useState<string>(String(splitRowsLimit));
+
+  useEffect(() => {
+    setSplitRowsInput(String(splitRowsLimit));
+  }, [splitRowsLimit]);
 
   const handleToggle = () => {
     const newState = !enabled;
@@ -65,14 +70,33 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
 
   const handleSplitRowsInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
+    setSplitRowsInput(raw);
     if (raw === '') {
-      onSplitRowsLimitChange?.(9990);
       return;
     }
     const parsed = Number(raw);
     if (Number.isFinite(parsed) && parsed > 0) {
       onSplitRowsLimitChange?.(Math.floor(parsed));
     }
+  };
+
+  const handleSplitRowsBlur = () => {
+    const trimmed = splitRowsInput.trim();
+    if (trimmed === '') {
+      setSplitRowsInput('9990');
+      onSplitRowsLimitChange?.(9990);
+      return;
+    }
+
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setSplitRowsInput(String(splitRowsLimit));
+      return;
+    }
+
+    const normalized = String(Math.floor(parsed));
+    setSplitRowsInput(normalized);
+    onSplitRowsLimitChange?.(Math.floor(parsed));
   };
 
   return (
@@ -114,8 +138,9 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
             min={1}
             step={1}
             placeholder="По сколько строк разбить файл?"
-            value={splitRowsLimit}
+            value={splitRowsInput}
             onChange={handleSplitRowsInput}
+            onBlur={handleSplitRowsBlur}
           />
         </label>
       </div>

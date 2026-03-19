@@ -85,38 +85,37 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {isLoading ? (
-        <Loader /> // Показываем Loader во время загрузки
-      ) : (
-        <>
-          <div className={styles.dataUploadBox} onClick={handleButtonClick}>
-            {fileName && (
-              <button
-                type="button"
-                className={styles.clearButton}
-                onClick={handleClear}
-                aria-label="Очистить загруженный файл"
-              >
-                ×
-              </button>
-            )}
-            <p className={styles.dataParagraf}>
-              {fileName
-                ? `Загружен файл: ${fileName}`
-                : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
-            </p>
-            <input
-              type="file"
-              accept=".xlsx, .xls"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
+      <div className={styles.dataUploadBox} onClick={handleButtonClick}>
+        {fileName && !isLoading && (
+          <button
+            type="button"
+            className={styles.clearButton}
+            onClick={handleClear}
+            aria-label="Очистить загруженный файл"
+          >
+            ×
+          </button>
+        )}
+        <p className={styles.dataParagraf}>
+          {fileName
+            ? `Загружен файл: ${fileName}`
+            : 'Перетащите или нажмите, чтобы выбрать файл "Данные о поставках"'}
+        </p>
+        <input
+          type="file"
+          accept=".xlsx, .xls"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        {isLoading && (
+          <div className={styles.loaderOverlay}>
+            <Loader />
           </div>
-          {error && <p className={styles.dataError}>{error}</p>}
-          {success && <p className={styles.dataSuccess}>{success}</p>}
-        </>
-      )}
+        )}
+      </div>
+      {error && <p className={styles.dataError}>{error}</p>}
+      {success && <p className={styles.dataSuccess}>{success}</p>}
     </div>
   );
 };
