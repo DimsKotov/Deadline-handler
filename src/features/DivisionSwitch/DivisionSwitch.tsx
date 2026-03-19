@@ -11,6 +11,10 @@ interface DivisionSwitchProps {
    * Обработчик изменения состояния переключателя
    */
   onChange?: (isEnabled: boolean) => void;
+  supplierName?: string;
+  onSupplierNameChange?: (value: string) => void;
+  splitRowsLimit?: number;
+  onSplitRowsLimitChange?: (value: number) => void;
   
   /**
    * Дополнительный CSS-класс
@@ -26,6 +30,10 @@ interface DivisionSwitchProps {
 const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
   isEnabled = true,
   onChange,
+  supplierName = '',
+  onSupplierNameChange,
+  splitRowsLimit = 9990,
+  onSplitRowsLimitChange,
   className = ''
 }) => {
   const [enabled, setEnabled] = useState<boolean>(isEnabled);
@@ -51,6 +59,22 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
       : 'Файл будет сформирован без разбития';
   };
 
+  const handleSupplierInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onSupplierNameChange?.(e.target.value);
+  };
+
+  const handleSplitRowsInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    if (raw === '') {
+      onSplitRowsLimitChange?.(9990);
+      return;
+    }
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      onSplitRowsLimitChange?.(Math.floor(parsed));
+    }
+  };
+
   return (
     <div className={`${styles.container} ${className}`}>
       <div className={styles.labelContainer}>
@@ -71,6 +95,30 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
           <div className={styles.switchThumb} />
         </div>
       </button>
+      <div className={styles.inputsBlock}>
+        <label className={styles.inputLabel}>
+          Название поставщика
+          <input
+            className={styles.input}
+            type="text"
+            placeholder="Напишите название поставщика"
+            value={supplierName}
+            onChange={handleSupplierInput}
+          />
+        </label>
+        <label className={styles.inputLabel}>
+          Разбить файлы по кол-ву строк
+          <input
+            className={styles.input}
+            type="number"
+            min={1}
+            step={1}
+            placeholder="По сколько строк разбить файл?"
+            value={splitRowsLimit}
+            onChange={handleSplitRowsInput}
+          />
+        </label>
+      </div>
     </div>
   );
 };

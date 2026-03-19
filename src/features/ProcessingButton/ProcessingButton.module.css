@@ -1,9 +1,18 @@
 .container {
-  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
+  min-height: 170px;
   padding-block-end: 15px;
+}
+
+.buttonsRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  width: 100%;
 }
 
 .uploadButton {
@@ -20,12 +29,12 @@
 }
 
 .loaderContainer {
-  position: absolute;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
   width: 100%;
-  top: 20%;
+  min-height: 155px;
   background-color: transparent;
   gap: 15px;
 }

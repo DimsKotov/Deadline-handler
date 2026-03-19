@@ -71,6 +71,14 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
     fileInputRef.current?.click();
   };
 
+  const handleClear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setError(null);
+    setSuccess(null);
+    resetFileInput();
+    onReset();
+  };
+
   return (
     <div
       className={styles.dataContainer}
@@ -82,6 +90,16 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
       ) : (
         <>
           <div className={styles.dataUploadBox} onClick={handleButtonClick}>
+            {fileName && (
+              <button
+                type="button"
+                className={styles.clearButton}
+                onClick={handleClear}
+                aria-label="Очистить загруженный файл"
+              >
+                ×
+              </button>
+            )}
             <p className={styles.dataParagraf}>
               {fileName
                 ? `Загружен файл: ${fileName}`

@@ -5,6 +5,7 @@ import DeliveryTime from "../../../features/DeliveryTime/DeliveryTime";
 import ProcessingButton from "../../../features/ProcessingButton/ProcessingButton";
 import FileFormationOne from "../../../features/FileFormation/FileFormationOne";
 import FileFormationTwo from "../../../features/FileFormation/FileFormationTwo";
+import FileFormationNSI from "../../../features/FileFormation/FileFormationNSI.tsx";
 import ErrorHandler from "../../../features/ErrorHandler/ErrorHandler";
 import DivisionSwitch from "../../../features/DivisionSwitch/DivisionSwitch"; // Импорт нового компонента
 
@@ -20,12 +21,16 @@ function MainLayout() {
   const [isDeliveryTimeLoaded, setIsDeliveryTimeLoaded] = useState(false);
   const [showFileFormationOne, setShowFileFormationOne] = useState(false);
   const [showFileFormationTwo, setShowFileFormationTwo] = useState(false);
+  const [showFileFormationNSI, setShowFileFormationNSI] = useState(false);
   const [fileOneDownloadTrigger, setFileOneDownloadTrigger] = useState(0);
   const [fileTwoDownloadTrigger, setFileTwoDownloadTrigger] = useState(0);
+  const [fileNSIDownloadTrigger, setFileNSIDownloadTrigger] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // НОВОЕ: состояние для управления разбиением файлов
   const [splitFilesEnabled, setSplitFilesEnabled] = useState<boolean>(true);
+  const [splitRowsLimit, setSplitRowsLimit] = useState<number>(9990);
+  const [supplierName, setSupplierName] = useState<string>("");
 
   // Состояние для управления ошибками
   const [showError, setShowError] = useState(false);
@@ -57,6 +62,16 @@ function MainLayout() {
   const handleSplitToggle = (isEnabled: boolean) => {
     setSplitFilesEnabled(isEnabled);
     console.log(`Разбиение файлов: ${isEnabled ? "ВКЛЮЧЕНО" : "ВЫКЛЮЧЕНО"}`);
+  };
+
+  const handleSupplierNameChange = (value: string) => {
+    setSupplierName(value);
+  };
+
+  const handleSplitRowsLimitChange = (value: number) => {
+    if (Number.isFinite(value) && value > 0) {
+      setSplitRowsLimit(Math.floor(value));
+    }
   };
 
   const handleDataSuccess = (data: any[]) => {
@@ -129,6 +144,14 @@ function MainLayout() {
     setErrorMessage("");
   };
 
+  const handleShowFileFormationNSI = () => {
+    setIsProcessing(true);
+    setShowFileFormationNSI(true);
+    setFileNSIDownloadTrigger((prev) => prev + 1);
+    setShowError(false);
+    setErrorMessage("");
+  };
+
   const handleFileFormationOneComplete = (success: boolean) => {
     setIsProcessing(false);
     if (success) {
@@ -155,12 +178,28 @@ function MainLayout() {
     }
   };
 
+  const handleFileFormationNSIComplete = (success: boolean) => {
+    setIsProcessing(false);
+    if (success) {
+      console.log("Файл НСИ успешно сформирован и предложен к скачиванию");
+    } else {
+      console.error("Ошибка при формировании файла НСИ");
+      if (!showError) {
+        showErrorHandler("Ошибка при формировании файла НСИ");
+      }
+    }
+  };
+
   return (
     <div className={styles.mainContainerWrapper}>
       <div className={styles.divisionSwitchWrapper}>
         <DivisionSwitch
           isEnabled={splitFilesEnabled}
           onChange={handleSplitToggle}
+          supplierName={supplierName}
+          onSupplierNameChange={handleSupplierNameChange}
+          splitRowsLimit={splitRowsLimit}
+          onSplitRowsLimitChange={handleSplitRowsLimitChange}
         />
       </div>
       <div className={styles.mainContainer}>
@@ -170,12 +209,14 @@ function MainLayout() {
       <div>
         <ProcessingButton
           label="Сформировать файл APEX"
+          nsiLabel="Сформировать файл для НСИ"
           onClick={handleButtonClick}
           disabled={!isDeliveryTimeLoaded}
           deliveryDataLoaded={deliveryDataReady}
           deliveryTimeLoaded={deliveryTimeReady}
           showFileFormationOne={handleShowFileFormationOne}
           showFileFormationTwo={handleShowFileFormationTwo}
+          showFileFormationNSI={handleShowFileFormationNSI}
           isProcessing={isProcessing}
         />
       </div>
@@ -193,6 +234,8 @@ function MainLayout() {
           downloadTrigger={fileOneDownloadTrigger}
           onProcessingComplete={handleFileFormationOneComplete}
           splitFilesEnabled={splitFilesEnabled} // Передаем состояние в компонент
+          splitRowsLimit={splitRowsLimit}
+          supplierName={supplierName}
         />
       )}
 
@@ -205,6 +248,19 @@ function MainLayout() {
           downloadTrigger={fileTwoDownloadTrigger}
           onProcessingComplete={handleFileFormationTwoComplete}
           splitFilesEnabled={splitFilesEnabled} // Передаем состояние в компонент
+          splitRowsLimit={splitRowsLimit}
+          supplierName={supplierName}
+        />
+      )}
+      {showFileFormationNSI && (
+        <FileFormationNSI
+          deliveryTimeData={deliveryTimeData}
+          deliveryData={deliveryData}
+          deliveryTimeFileName={deliveryTimeFileName}
+          deliveryTimeSources={deliveryTimeSources}
+          downloadTrigger={fileNSIDownloadTrigger}
+          onProcessingComplete={handleFileFormationNSIComplete}
+          supplierName={supplierName}
         />
       )}
     </div>

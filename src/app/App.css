@@ -3,3 +3,9 @@
   min-block-size: 100vb;
   margin: 0 auto;
 }
+
+.appShell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

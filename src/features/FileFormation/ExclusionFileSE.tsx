@@ -8,6 +8,8 @@ interface ExclusionFileSEProps {
   downloadTrigger: number;
   onProcessingComplete?: (success: boolean) => void;
   splitFilesEnabled?: boolean;
+  splitRowsLimit?: number;
+  supplierName?: string;
   moscowColumnFound: boolean;
   ekaterinburgColumnFound: boolean;
 }
@@ -18,9 +20,17 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
   downloadTrigger,
   onProcessingComplete,
   splitFilesEnabled = true,
+  splitRowsLimit = 9990,
+  supplierName = "",
   moscowColumnFound,
   ekaterinburgColumnFound
 }) => {
+  const getApexFileName = (suffix?: string) => {
+    const supplierPart = supplierName.trim() ? ` ${supplierName.trim()}` : "";
+    const suffixPart = suffix ? ` ${suffix}` : "";
+    return `Файл для загрузки APEX${supplierPart}${suffixPart}.xlsx`;
+  };
+
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
 
@@ -277,7 +287,7 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
     
     return {
       blob: new Blob([excelBuffer], { type: 'application/octet-stream' }),
-      fileName: 'Файл для загрузки APEX (особые правила).xlsx'
+      fileName: getApexFileName('(особые правила)')
     };
   };
 
@@ -445,7 +455,7 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
         }
       } else {
         // РЕЖИМ "РАЗБИВАТЬ ФАЙЛЫ" - стандартная логика (9990 строк на файл)
-        const MAX_ROWS = 9990;
+        const MAX_ROWS = splitRowsLimit;
         const totalParts = Math.ceil(allData.length / MAX_ROWS);
         let allDownloadsSuccessful = true;
         
@@ -469,7 +479,7 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
           });
           
           const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-          const fileName = `Файл для загрузки APEX (особые правила, часть ${part} из ${totalParts}).xlsx`;
+          const fileName = getApexFileName(`(особые правила, часть ${part} из ${totalParts})`);
           
           const success = await downloadBlob(blob, fileName);
           if (!success) {

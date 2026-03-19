@@ -1,19 +1,24 @@
 .container {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(330px, 1fr) 72px minmax(560px, 1.4fr);
   align-items: center;
-  justify-content: space-between;
+  box-sizing: border-box;
   padding: 16px;
   background-color: var(--clr-ui-background, #c4f1ae);
   border-radius: 12px;
   border: 2px solid var(--clr-ui-text, #4aa31d);
   transition: all 0.3s ease;
   gap: 20px;
-  min-width: 600px;
+  width: 1200px;
+  min-width: 1300px;
+  max-width: 1300px;
 }
 
 .labelContainer {
   display: flex;
-  flex-direction: column;  
+  flex-direction: column;
+  min-height: 56px;
+  justify-content: center;
 }
 
 .label {
@@ -24,7 +29,11 @@
 
 .description {
   font-size: 18px;
-  color: var(--clr-ui-text, #4aa31d);  
+  color: var(--clr-ui-text, #4aa31d);
+  line-height: 1.2;
+  min-height: calc(1.2em * 2);
+  display: flex;
+  align-items: flex-start;
 }
 
 .switch {
@@ -37,6 +46,39 @@
   padding: 0;
   outline: none;
   transition: all 0.3s ease;
+  justify-self: center;
+}
+
+.inputsBlock {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-self: stretch;
+}
+
+.inputLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--clr-ui-text, #4aa31d);
+}
+
+.input {
+  min-width: 280px;
+  height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 2px solid var(--clr-ui-text, #4aa31d);
+  color: var(--clr-ui-text, #4aa31d);
+  background-color: #f4ffee;
+  font-size: 16px;
+}
+
+.input:focus {
+  outline: 1px solid var(--clr-ui-text, #4aa31d);
 }
 
 
@@ -113,17 +155,26 @@
 /* Адаптивность */
 @media (max-width: 768px) {
   .container {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100%;
     padding: 12px;
+    min-width: 0;
   }
 
   .labelContainer {
-    margin-right: 0;
-    margin-bottom: 12px;
+    min-height: 0;
   }
 
   .switch {
-    align-self: flex-end;
+    justify-self: start;
+  }
+
+  .inputsBlock {
+    width: 100%;
+  }
+
+  .input {
+    min-width: 100%;
   }
 }

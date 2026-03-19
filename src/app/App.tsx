@@ -5,7 +5,7 @@ import Footer from "../app/layout/Footer/Footer";
 
 function App() {
   return (
-    <div>
+    <div className="appShell">
       <Header />
       <MainLayout />
       <Footer />

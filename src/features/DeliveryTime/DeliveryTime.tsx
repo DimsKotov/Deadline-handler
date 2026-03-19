@@ -141,6 +141,15 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
     fileInputRef.current?.click();
   };
 
+  const handleClear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setError(null);
+    setSuccess(null);
+    setLoadedFiles([]);
+    resetFileInput();
+    onReset();
+  };
+
   return (
     <div
       className={styles.timeContainer}
@@ -152,6 +161,16 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
       ) : (
         <>
           <div className={styles.timeUploadBox} onClick={handleButtonClick}>
+            {fileName && (
+              <button
+                type="button"
+                className={styles.clearButton}
+                onClick={handleClear}
+                aria-label="Очистить загруженные файлы"
+              >
+                ×
+              </button>
+            )}
             <p className={styles.timeParagraf}>
               {fileName
                 ? `Загружен файл: ${fileName}`

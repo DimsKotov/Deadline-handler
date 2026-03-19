@@ -8,6 +8,8 @@ interface ExclusionFileBettermanProps {
   downloadTrigger: number;
   onProcessingComplete?: (success: boolean) => void;
   splitFilesEnabled?: boolean;
+  splitRowsLimit?: number;
+  supplierName?: string;
 }
 
 const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
@@ -16,7 +18,15 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
   downloadTrigger,
   onProcessingComplete,
   splitFilesEnabled = true,
+  splitRowsLimit = 9990,
+  supplierName = "",
 }) => {
+  const getApexFileName = (suffix?: string) => {
+    const supplierPart = supplierName.trim() ? ` ${supplierName.trim()}` : "";
+    const suffixPart = suffix ? ` ${suffix}` : "";
+    return `Файл для загрузки APEX${supplierPart}${suffixPart}.xlsx`;
+  };
+
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
 
@@ -74,13 +84,13 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
         );
         const success = await downloadBlob(
           blob,
-          "Файл для загрузки APEX (Betterman).xlsx"
+          getApexFileName("(Betterman)")
         );
         if (onProcessingComplete) {
           onProcessingComplete(success);
         }
       } else {
-        const MAX_ROWS = 9990;
+        const MAX_ROWS = splitRowsLimit;
         const totalParts = Math.ceil(allData.length / MAX_ROWS);
         let allDownloadsSuccessful = true;
 
@@ -94,7 +104,7 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
             EXCEL_HEADERS,
             "Импортированные данные"
           );
-          const fileName = `Файл для загрузки APEX (Betterman, часть ${part} из ${totalParts}).xlsx`;
+          const fileName = getApexFileName(`(Betterman, часть ${part} из ${totalParts})`);
           const success = await downloadBlob(blob, fileName);
 
           if (!success) {

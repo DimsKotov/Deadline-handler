@@ -13,6 +13,8 @@ interface FileFormationTwoProps {
   downloadTrigger: number;
   onProcessingComplete?: (success: boolean) => void;
   splitFilesEnabled?: boolean;
+  splitRowsLimit?: number;
+  supplierName?: string;
 }
 
 const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
@@ -23,6 +25,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
   downloadTrigger,
   onProcessingComplete,
   splitFilesEnabled = true,
+  splitRowsLimit = 9990,
+  supplierName = "",
 }) => {
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
@@ -155,6 +159,12 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
     "Сообщение",
   ];
 
+  const getApexFileName = (suffix?: string) => {
+    const supplierPart = supplierName.trim() ? ` ${supplierName.trim()}` : "";
+    const suffixPart = suffix ? ` ${suffix}` : "";
+    return `Файл для загрузки APEX${supplierPart}${suffixPart}.xlsx`;
+  };
+
   // Стандартная функция обработки (оригинальная логика)
   const handleStandardDownload = async () => {
     try {
@@ -177,14 +187,14 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
       if (!splitFilesEnabled) {
         // РЕЖИМ "НЕ РАЗБИВАТЬ ФАЙЛ" - создаем один файл
         const blob = createExcelBlob(allData, EXCEL_HEADERS, "Импортированные данные");
-        const success = await downloadBlob(blob, 'Файл для загрузки APEX.xlsx');
+        const success = await downloadBlob(blob, getApexFileName());
         
         if (onProcessingComplete) {
           onProcessingComplete(success);
         }
       } else {
         // РЕЖИМ "РАЗБИВАТЬ ФАЙЛЫ" - стандартная логика (9990 строк на файл)
-        const MAX_ROWS = 9990;
+        const MAX_ROWS = splitRowsLimit;
         const totalParts = Math.ceil(allData.length / MAX_ROWS);
         let allDownloadsSuccessful = true;
         
@@ -194,7 +204,7 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
           const partData = allData.slice(startIndex, endIndex);
           
           const blob = createExcelBlob(partData, EXCEL_HEADERS, "Импортированные данные");
-          const fileName = `Файл для загрузки APEX (часть ${part} из ${totalParts}).xlsx`;
+          const fileName = getApexFileName(`(часть ${part} из ${totalParts})`);
           
           const success = await downloadBlob(blob, fileName);
           if (!success) {
@@ -232,6 +242,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
         downloadTrigger={downloadTrigger}
         onProcessingComplete={onProcessingComplete}
         splitFilesEnabled={splitFilesEnabled}
+        splitRowsLimit={splitRowsLimit}
+        supplierName={supplierName}
       />
     );
   }
@@ -244,6 +256,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
         downloadTrigger={downloadTrigger}
         onProcessingComplete={onProcessingComplete}
         splitFilesEnabled={splitFilesEnabled}
+        splitRowsLimit={splitRowsLimit}
+        supplierName={supplierName}
       />
     );
   }
@@ -258,6 +272,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
         splitFilesEnabled={splitFilesEnabled}
         moscowColumnFound={moscowColumnFound}
         ekaterinburgColumnFound={ekaterinburgColumnFound}
+        splitRowsLimit={splitRowsLimit}
+        supplierName={supplierName}
       />
     );
   }

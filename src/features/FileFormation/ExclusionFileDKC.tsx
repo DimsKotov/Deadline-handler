@@ -14,6 +14,8 @@ interface ExclusionFileDKCProps {
   downloadTrigger: number;
   onProcessingComplete?: (success: boolean) => void;
   splitFilesEnabled?: boolean;
+  splitRowsLimit?: number;
+  supplierName?: string;
 }
 
 const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
@@ -24,7 +26,15 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
   downloadTrigger,
   onProcessingComplete,
   splitFilesEnabled = true,
+  splitRowsLimit = 9990,
+  supplierName = "",
 }) => {
+  const getApexFileName = (suffix?: string) => {
+    const supplierPart = supplierName.trim() ? ` ${supplierName.trim()}` : "";
+    const suffixPart = suffix ? ` ${suffix}` : "";
+    return `Файл для загрузки APEX${supplierPart}${suffixPart}.xlsx`;
+  };
+
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
 
@@ -170,7 +180,7 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
         );
         const success = await downloadBlob(
           blob,
-          `Файл для загрузки APEX (${outputFileLabel}).xlsx`
+          getApexFileName(`(${outputFileLabel})`)
         );
 
         if (onProcessingComplete) {
@@ -178,7 +188,7 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
         }
       } else {
         // Разбиение на части по 9990 строк
-        const MAX_ROWS = 9990;
+        const MAX_ROWS = splitRowsLimit;
         const totalParts = Math.ceil(allData.length / MAX_ROWS);
         let allDownloadsSuccessful = true;
 
@@ -192,7 +202,7 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
             EXCEL_HEADERS,
             "Импортированные данные"
           );
-          const fileName = `Файл для загрузки APEX (${outputFileLabel}, часть ${part} из ${totalParts}).xlsx`;
+          const fileName = getApexFileName(`(${outputFileLabel}, часть ${part} из ${totalParts})`);
 
           const success = await downloadBlob(blob, fileName);
           if (!success) {

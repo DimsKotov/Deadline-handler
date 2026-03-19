@@ -1,5 +1,8 @@
 .mainContainerWrapper {
-    min-height: 720px;    
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .mainContainer {
