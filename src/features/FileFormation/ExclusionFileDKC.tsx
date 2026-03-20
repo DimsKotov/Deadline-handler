@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { createExcelBlob, downloadBlob } from "../../utils/ExcelUtils";
+import {
+  createApexExcelBlobFromTemplate,
+  downloadBlob,
+} from "../../utils/ExcelUtils";
 import {
   buildDkc1100AllData,
   buildDkc1200AllData,
@@ -206,10 +209,11 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
 
       if (!splitFilesEnabled) {
         // Один файл без разбиения
-        const blob = createExcelBlob(
+        const blob = await createApexExcelBlobFromTemplate(
           allData,
           EXCEL_HEADERS,
-          "Импортированные данные"
+          "Шаблон для загрузки APEX.xlsx",
+          "Импортированные данные",
         );
         const success = await downloadBlob(
           blob,
@@ -230,10 +234,11 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
           const endIndex = Math.min(part * MAX_ROWS, allData.length);
           const partData = allData.slice(startIndex, endIndex);
 
-          const blob = createExcelBlob(
+          const blob = await createApexExcelBlobFromTemplate(
             partData,
             EXCEL_HEADERS,
-            "Импортированные данные"
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
           );
           const fileName = getApexFileName(`(${outputFileLabel}, часть ${part} из ${totalParts})`);
 

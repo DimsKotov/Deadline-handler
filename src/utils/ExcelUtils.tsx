@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // Функция для нормализации названия столбца
 const normalizeColumnName = (name: string): string => {
@@ -88,6 +89,178 @@ export const createExcelBlob = (
   return new Blob([excelBuffer], {
     type: "application/octet-stream",
   });
+};
+
+const normalizeHeaderText = (value: any): string => {
+  const s = String(value ?? "").trim();
+  return s.replace(/\s+/g, " ").toLowerCase();
+};
+
+// Формирование APEX по готовому Excel-шаблону из /public/template
+// Важно: не создаём значения/ячейки для пустых полей, чтобы не раздувать файл.
+export const createApexExcelBlobFromTemplate = async (
+  data: any[],
+  headers: string[],
+  templateFileName: string,
+  _sheetNameFallback = "Импортированные данные",
+): Promise<Blob> => {
+  console.log("[APEX Template][exceljs] Start", {
+    templateFileName,
+    rows: data?.length ?? 0,
+  });
+
+  const rawTemplateName = templateFileName;
+  const templateUrlEncoded = `${import.meta.env.BASE_URL}template/${encodeURIComponent(rawTemplateName)}`;
+  const response = await fetch(templateUrlEncoded);
+  if (!response.ok) {
+    throw new Error(
+      `Не удалось загрузить шаблон APEX по URL: ${templateUrlEncoded} (status=${response.status})`,
+    );
+  }
+
+  const templateBuffer = await response.arrayBuffer();
+
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(templateBuffer);
+
+  const ws = workbook.worksheets[0];
+  if (!ws) throw new Error("В шаблоне не найдена таблица");
+
+  const headerByNormalized = new Map<string, string>();
+  for (const h of headers) headerByNormalized.set(normalizeHeaderText(h), h);
+
+  // 1) Ищем строку заголовков и мап колонок
+  const scanMaxRows = Math.min(ws.rowCount || 50, 20);
+  let headerRowNumber: number | null = null; // 1-based
+  const colMap = new Map<string, number>(); // header -> colNumber (1-based)
+
+  // 1.1) Сначала ищем строку, где есть заголовок "ЦС"
+  const normalizedCs = normalizeHeaderText("ЦС");
+  for (let r = 1; r <= scanMaxRows; r++) {
+    const row = ws.getRow(r);
+    let hasCs = false;
+    const candidate = new Map<string, number>();
+
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const cellValue = cell.value as any;
+      const text =
+        typeof cellValue === "string" || typeof cellValue === "number"
+          ? String(cellValue)
+          : "";
+      if (!text) return;
+
+      const normalized = normalizeHeaderText(text);
+      if (normalized === normalizedCs) hasCs = true;
+
+      const headerName = headerByNormalized.get(normalized);
+      if (headerName) candidate.set(headerName, colNumber);
+    });
+
+    if (hasCs) {
+      headerRowNumber = r;
+      colMap.clear();
+      for (const [k, v] of candidate.entries()) colMap.set(k, v);
+      break;
+    }
+  }
+
+  // 1.2) Если по "ЦС" не нашли — делаем общий поиск по количеству совпадений
+  if (headerRowNumber === null || colMap.size === 0) {
+    for (let r = 1; r <= scanMaxRows; r++) {
+      const row = ws.getRow(r);
+      const candidate = new Map<string, number>();
+      let matches = 0;
+
+      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const cellValue = cell.value as any;
+        const text =
+          typeof cellValue === "string" || typeof cellValue === "number"
+            ? String(cellValue)
+            : "";
+        if (!text) return;
+
+        const normalized = normalizeHeaderText(text);
+        const headerName = headerByNormalized.get(normalized);
+        if (headerName) {
+          candidate.set(headerName, colNumber);
+          matches++;
+        }
+      });
+
+      if (matches >= Math.min(4, Math.ceil(headers.length / 2))) {
+        headerRowNumber = r;
+        colMap.clear();
+        for (const [k, v] of candidate.entries()) colMap.set(k, v);
+        break;
+      }
+    }
+  }
+
+  if (headerRowNumber === null || colMap.size === 0) {
+    throw new Error(`Не найдены заголовки в шаблоне: ${templateFileName}`);
+  }
+
+  // В шаблоне стили обычно заданы для первой строки данных (следующая за заголовком)
+  const startRow = headerRowNumber + 1;
+  const templateStyleRow = startRow;
+
+  // Чтобы гарантированно не тащить хвосты пустых строк/внутренние range'ы шаблона,
+  // создаём новый лист только с нужным диапазоном данных.
+  const outWb = new ExcelJS.Workbook();
+  const outWs = outWb.addWorksheet(ws.name);
+
+  const colsArr = Array.from(colMap.values());
+  const minCol = Math.min(...colsArr);
+  const maxCol = Math.max(...colsArr);
+
+  // Копируем ширины колонок (если они заданы в шаблоне).
+  for (let col = minCol; col <= maxCol; col++) {
+    const srcCol = ws.getColumn(col);
+    const dstCol = outWs.getColumn(col);
+    if (srcCol?.width) dstCol.width = srcCol.width;
+  }
+
+  // Копируем шапку (значения и стиль) для нужных колонок
+  for (let col = minCol; col <= maxCol; col++) {
+    const srcCell = ws.getCell(headerRowNumber, col);
+    if (srcCell?.style) {
+      outWs.getCell(headerRowNumber, col).style = JSON.parse(JSON.stringify(srcCell.style));
+    }
+    if (srcCell?.value !== null && srcCell?.value !== undefined) {
+      outWs.getCell(headerRowNumber, col).value = srcCell.value as any;
+    }
+  }
+
+  // Заполняем данные: создаём строку только если есть хотя бы одно заполненное значение,
+  // и копируем стили из templateStyleRow для колонок.
+  for (let i = 0; i < data.length; i++) {
+    const rowObj = data[i];
+    const targetRow = startRow + i;
+
+    const anyFilled = headers.some((h) => {
+      const v = rowObj?.[h];
+      return !(v === "" || v === null || v === undefined);
+    });
+
+    if (!anyFilled) continue; // не создаём строку вообще
+
+    for (const h of headers) {
+      const col = colMap.get(h);
+      if (!col) continue;
+
+      const srcCell = ws.getCell(templateStyleRow, col);
+      if (srcCell?.style) {
+        outWs.getCell(targetRow, col).style = JSON.parse(JSON.stringify(srcCell.style));
+      }
+
+      const value = rowObj?.[h];
+      if (value === "" || value === null || value === undefined) continue;
+      outWs.getCell(targetRow, col).value = value;
+    }
+  }
+
+  const outBuffer = await outWb.xlsx.writeBuffer();
+  return new Blob([outBuffer], { type: "application/octet-stream" });
 };
 
 const parseWorkbookToJson = (

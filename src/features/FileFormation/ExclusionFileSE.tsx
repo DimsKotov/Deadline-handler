@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
-import { processProcessingValue, downloadBlob } from '../../utils/ExcelUtils';
+import {
+  processProcessingValue,
+  downloadBlob,
+  createApexExcelBlobFromTemplate,
+} from '../../utils/ExcelUtils';
 
 interface ExclusionFileSEProps {
   deliveryTimeData: any[];
@@ -270,25 +273,27 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
   const createFile = async (data: any[]): Promise<{ blob: Blob, fileName: string }> => {
     const totalRows = data.length;
     console.log(`Создаю один Excel файл (${totalRows} строк)`);
-    
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(data, {
-      header: ["ЦС", "Код", "Тип", "Организация", "Предварительная обработка",
-              "Обработка", "Заключительная обработка", "Статус", "Сообщение"]
-    });
-    
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Импортированные данные");
-    
-    const excelBuffer = XLSX.write(workbook, {
-      bookType: 'xlsx',
-      type: 'array',
-      compression: true
-    });
-    
-    return {
-      blob: new Blob([excelBuffer], { type: 'application/octet-stream' }),
-      fileName: getApexFileName('(особые правила)')
-    };
+
+    const APEX_HEADERS = [
+      "ЦС",
+      "Код",
+      "Тип",
+      "Организация",
+      "Предварительная обработка",
+      "Обработка",
+      "Заключительная обработка",
+      "Статус",
+      "Сообщение",
+    ];
+
+    const blob = await createApexExcelBlobFromTemplate(
+      data,
+      APEX_HEADERS,
+      "Шаблон для загрузки APEX.xlsx",
+      "Импортированные данные",
+    );
+
+    return { blob, fileName: getApexFileName('(особые правила)') };
   };
 
   // Функция для создания всех данных
@@ -463,22 +468,25 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
           const startIndex = (part - 1) * MAX_ROWS;
           const endIndex = Math.min(part * MAX_ROWS, allData.length);
           const partData = allData.slice(startIndex, endIndex);
-          
-          const workbook = XLSX.utils.book_new();
-          const worksheet = XLSX.utils.json_to_sheet(partData, {
-            header: ["ЦС", "Код", "Тип", "Организация", "Предварительная обработка",
-                    "Обработка", "Заключительная обработка", "Статус", "Сообщение"]
-          });
-          
-          XLSX.utils.book_append_sheet(workbook, worksheet, "Импортированные данные");
-          
-          const excelBuffer = XLSX.write(workbook, {
-            bookType: 'xlsx',
-            type: 'array',
-            compression: true
-          });
-          
-          const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+
+          const APEX_HEADERS = [
+            "ЦС",
+            "Код",
+            "Тип",
+            "Организация",
+            "Предварительная обработка",
+            "Обработка",
+            "Заключительная обработка",
+            "Статус",
+            "Сообщение",
+          ];
+
+          const blob = await createApexExcelBlobFromTemplate(
+            partData,
+            APEX_HEADERS,
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
+          );
           const fileName = getApexFileName(`(особые правила, часть ${part} из ${totalParts})`);
           
           const success = await downloadBlob(blob, fileName);

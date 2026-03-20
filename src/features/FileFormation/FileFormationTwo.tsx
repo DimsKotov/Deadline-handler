@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import ExclusionFileSE from './ExclusionFileSE'; // Импорт компонента для особых правил
 import ExclusionFileDKC from './ExclusionFileDKC';
 import ExclusionFileBetterman from './ExclusionFileBetterman';
-import { downloadBlob, createExcelBlob } from '../../utils/ExcelUtils';
+import {
+  downloadBlob,
+  createApexExcelBlobFromTemplate,
+} from '../../utils/ExcelUtils';
 import { buildStandardAllData } from './FileFormationService';
 
 interface FileFormationTwoProps {
@@ -208,7 +211,12 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
       
       if (!splitFilesEnabled) {
         // РЕЖИМ "НЕ РАЗБИВАТЬ ФАЙЛ" - создаем один файл
-        const blob = createExcelBlob(allData, EXCEL_HEADERS, "Импортированные данные");
+        const blob = await createApexExcelBlobFromTemplate(
+          allData,
+          EXCEL_HEADERS,
+          "Шаблон для загрузки APEX.xlsx",
+          "Импортированные данные",
+        );
         const success = await downloadBlob(blob, getApexFileName());
         
         if (onProcessingComplete) {
@@ -225,7 +233,12 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
           const endIndex = Math.min(part * MAX_ROWS, allData.length);
           const partData = allData.slice(startIndex, endIndex);
           
-          const blob = createExcelBlob(partData, EXCEL_HEADERS, "Импортированные данные");
+          const blob = await createApexExcelBlobFromTemplate(
+            partData,
+            EXCEL_HEADERS,
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
+          );
           const fileName = getApexFileName(`(часть ${part} из ${totalParts})`);
           
           const success = await downloadBlob(blob, fileName);

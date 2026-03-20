@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { createExcelBlob, downloadBlob } from "../../utils/ExcelUtils";
+import {
+  createApexExcelBlobFromTemplate,
+  downloadBlob,
+} from "../../utils/ExcelUtils";
 import { buildBettermanAllData } from "./FileFormationService";
 
 interface ExclusionFileBettermanProps {
@@ -92,10 +95,11 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
       }
 
       if (!splitFilesEnabled) {
-        const blob = createExcelBlob(
+        const blob = await createApexExcelBlobFromTemplate(
           allData,
           EXCEL_HEADERS,
-          "Импортированные данные"
+          "Шаблон для загрузки APEX.xlsx",
+          "Импортированные данные",
         );
         const success = await downloadBlob(
           blob,
@@ -114,10 +118,11 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
           const endIndex = Math.min(part * MAX_ROWS, allData.length);
           const partData = allData.slice(startIndex, endIndex);
 
-          const blob = createExcelBlob(
+          const blob = await createApexExcelBlobFromTemplate(
             partData,
             EXCEL_HEADERS,
-            "Импортированные данные"
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
           );
           const fileName = getApexFileName(`(Betterman, часть ${part} из ${totalParts})`);
           const success = await downloadBlob(blob, fileName);

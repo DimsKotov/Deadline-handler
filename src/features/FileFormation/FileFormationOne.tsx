@@ -1,5 +1,9 @@
 import React, { useEffect, useRef } from "react";
-import { processProcessingValue, downloadBlob, createExcelBlob } from "../../utils/ExcelUtils";
+import {
+  processProcessingValue,
+  downloadBlob,
+  createApexExcelBlobFromTemplate,
+} from "../../utils/ExcelUtils";
 
 interface FileFormationOneProps {
   deliveryTimeData: any[];
@@ -226,7 +230,12 @@ const FileFormationOne: React.FC<FileFormationOneProps> = ({
       if (!splitFilesEnabled) {
         // РЕЖИМ "НЕ РАЗБИВАТЬ ФАЙЛ" - создаем один файл
         try {
-          const blob = createExcelBlob(allData, EXCEL_HEADERS, "Импортированные данные");
+          const blob = await createApexExcelBlobFromTemplate(
+            allData,
+            EXCEL_HEADERS,
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
+          );
           const success = await downloadBlob(blob, getApexFileName());
 
           if (onProcessingComplete) {
@@ -246,7 +255,12 @@ const FileFormationOne: React.FC<FileFormationOneProps> = ({
         // ИСПРАВЛЕНИЕ: Если только одна часть - используем простое название
         if (totalParts === 1) {
           // Создаем один файл без указания "часть 1 из 1"
-          const blob = createExcelBlob(allData, EXCEL_HEADERS, "Импортированные данные");
+          const blob = await createApexExcelBlobFromTemplate(
+            allData,
+            EXCEL_HEADERS,
+            "Шаблон для загрузки APEX.xlsx",
+            "Импортированные данные",
+          );
           const fileName = getApexFileName();
           const success = await downloadBlob(blob, fileName);
 
@@ -262,7 +276,12 @@ const FileFormationOne: React.FC<FileFormationOneProps> = ({
             const endIndex = Math.min(part * MAX_ROWS, totalRows);
             const partData = allData.slice(startIndex, endIndex);
 
-            const blob = createExcelBlob(partData, EXCEL_HEADERS, "Импортированные данные");
+            const blob = await createApexExcelBlobFromTemplate(
+              partData,
+              EXCEL_HEADERS,
+              "Шаблон для загрузки APEX.xlsx",
+              "Импортированные данные",
+            );
             const fileName = getApexFileName(`(часть ${part} из ${totalParts})`);
             const success = await downloadBlob(blob, fileName);
 
