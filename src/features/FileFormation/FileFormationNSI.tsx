@@ -186,10 +186,13 @@ const FileFormationNSI: React.FC<FileFormationNSIProps> = ({
   const buildOutputData = (): OutputRow[] => {
     const rawData =
       deliveryData && deliveryData.length > 0 ? buildTwoFileAllData() : buildOneFileAllData();
-    return rawData.map((row) => ({
+    const output = rawData.map((row) => ({
       ...row,
       Обработка: row.Обработка === "!!!" ? "По запросу" : row.Обработка,
     }));
+    // Сохраняем метаданные из билдера (например, excludedAll) для обработки "нет изменений"
+    (output as any).__meta = (rawData as any).__meta;
+    return output;
   };
 
   const sanitizeForExcelXml = (value: unknown): string => {
@@ -467,6 +470,21 @@ const FileFormationNSI: React.FC<FileFormationNSIProps> = ({
     try {
       const allData = buildOutputData();
       if (!allData || allData.length === 0) {
+        const meta = (allData as any).__meta as { excludedAll?: boolean } | undefined;
+
+        if (meta?.excludedAll) {
+          window.dispatchEvent(
+            new CustomEvent("fileFormationInfo", {
+              detail: {
+                message:
+                  "Изменений нет: сроки из файла «Данные о поставках» уже совпадают со сроками поставщика. Файл НСИ сформирован не будет.",
+              },
+            }),
+          );
+          if (onProcessingComplete) onProcessingComplete(true);
+          return;
+        }
+
         if (onProcessingComplete) onProcessingComplete(false);
         return;
       }

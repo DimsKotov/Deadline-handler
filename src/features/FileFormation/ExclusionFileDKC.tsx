@@ -134,7 +134,22 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
             const key = `${row?.["ЦС"] ?? ""}|${row?.["Код"] ?? ""}|${row?.["Обработка"] ?? ""}`;
             if (!uniq.has(key)) uniq.set(key, row);
           }
-          return Array.from(uniq.values());
+          const uniqArr = Array.from(uniq.values());
+
+          if (uniqArr.length === 0) {
+            const meta1200 = (data1200 as any).__meta as
+              | { excludedAll?: boolean }
+              | undefined;
+            const meta1100 = (data1100 as any).__meta as
+              | { excludedAll?: boolean }
+              | undefined;
+
+            (uniqArr as any).__meta = {
+              excludedAll: Boolean(meta1200?.excludedAll || meta1100?.excludedAll),
+            };
+          }
+
+          return uniqArr;
         }
 
         if (isDkc1200()) {
@@ -153,6 +168,24 @@ const ExclusionFileDKC: React.FC<ExclusionFileDKCProps> = ({
       })();
 
       if (allData.length === 0) {
+        const meta = (allData as any).__meta as
+          | { excludedAll?: boolean; matchedCount?: number; excludedCount?: number }
+          | undefined;
+
+        if (meta?.excludedAll) {
+          window.dispatchEvent(
+            new CustomEvent("fileFormationInfo", {
+              detail: {
+                message:
+                  "Изменений нет: сроки из файла «Данные о поставках» уже совпадают со сроками поставщика (DKC). Файл APEX сформирован не будет.",
+              },
+            }),
+          );
+
+          if (onProcessingComplete) onProcessingComplete(true);
+          return;
+        }
+
         console.log("ExclusionFileDKC: нет данных для формирования файла");
         if (onProcessingComplete) {
           onProcessingComplete(false);

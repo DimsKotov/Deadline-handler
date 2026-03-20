@@ -3,7 +3,8 @@ import { processProcessingValue } from "../../utils/ExcelUtils";
 // Нормализация названий и значений
 const normalizeColumnName = (name: string): string => {
   if (!name) return "";
-  return name.toString().trim().toLowerCase();
+  // Нормализуем пробелы, чтобы заголовки совпадали даже при лишних/разных пробелах
+  return name.toString().trim().replace(/\s+/g, " ").toLowerCase();
 };
 
 const normalizeValue = (value: any): string => {
@@ -11,11 +12,27 @@ const normalizeValue = (value: any): string => {
   return value.toString().trim();
 };
 
+// Нормализация "срока/обработки" для сравнения:
+// - если значение похоже на число (в т.ч. с запятой), приводим к числу и обратно к строке
+// - если не число — сравниваем как есть (после processProcessingValue)
+const canonicalProcessingValue = (value: any): string => {
+  const processed = processProcessingValue(value);
+  if (processed === "!!!") return "!!!";
+  const num = parseFloat(processed.replace(",", "."));
+  if (!isNaN(num)) return String(num);
+  return processed;
+};
+
 // ===== ЛОГИКА ДЛЯ FileFormationTwo (стандартный сценарий) =====
 
 // Поиск столбца со сроками в deliveryTime
 const findProcessingColumnInDeliveryTime = (row: any): string | null => {
-  const possibleColumnNames = [
+  const exactColumnNames = [
+    // ваш кейс
+    "Срок Готовн Отгр (Обработка)",
+    "Срок готовн отгр (обработка)",
+
+    // fallback точные совпадения
     "Срок",
     "Срок производства",
     "Срок изготовления",
@@ -33,38 +50,53 @@ const findProcessingColumnInDeliveryTime = (row: any): string | null => {
 
   const rowKeys = Object.keys(row);
 
-  // Сначала ищем точное совпадение после нормализации
-  for (const columnName of possibleColumnNames) {
+  // 1) Сначала ищем точное совпадение из списка точных совпадений
+  for (const columnName of exactColumnNames) {
     const normalizedColumnName = normalizeColumnName(columnName);
-    for (const rowKey of rowKeys) {
-      const normalizedRowKey = normalizeColumnName(rowKey);
-      if (normalizedRowKey === normalizedColumnName) {
-        return rowKey;
-      }
-    }
+    const found = rowKeys.find((rowKey) => normalizeColumnName(rowKey) === normalizedColumnName);
+    if (found) return found;
   }
 
-  // Если точного совпадения нет, ищем частичное совпадение
+  // 2) Если точных совпадений не нашли — ищем частично, но с приоритетом
+  // и исключаем "предварительная обработка", чтобы не брать не тот столбец.
+  let bestKey: string | null = null;
+  let bestScore = -Infinity;
+
   for (const rowKey of rowKeys) {
-    const normalizedRowKey = normalizeColumnName(rowKey);
-    if (
-      normalizedRowKey.includes("срок") ||
-      normalizedRowKey.includes("производство") ||
-      normalizedRowKey.includes("изготовление") ||
-      normalizedRowKey.includes("поставки") ||
-      normalizedRowKey.includes("выполнения") ||
-      normalizedRowKey.includes("время") ||
-      normalizedRowKey.includes("term") ||
-      normalizedRowKey.includes("lead") ||
-      normalizedRowKey.includes("delivery") ||
-      normalizedRowKey.includes("production") ||
-      normalizedRowKey.includes("manufacturing")
-    ) {
-      return rowKey;
+    const k = normalizeColumnName(rowKey);
+    if (!k) continue;
+    if (k.includes("предвар")) continue; // важный фильтр от неверного столбца
+
+    const hasDeadlineWords =
+      k.includes("срок") ||
+      k.includes("производство") ||
+      k.includes("изготовление") ||
+      k.includes("поставки") ||
+      k.includes("выполнения") ||
+      k.includes("время") ||
+      k.includes("term") ||
+      k.includes("lead") ||
+      k.includes("delivery") ||
+      k.includes("production") ||
+      k.includes("manufacturing");
+    if (!hasDeadlineWords) continue;
+
+    let score = 0;
+    if (k.includes("готовн")) score += 70;
+    if (k.includes("отгр")) score += 70;
+    if (k.includes("обработк")) score += 40;
+    if (k.includes("срок")) score += 20;
+
+    // Чуть снижаем score за слишком длинные "шумные" названия
+    score -= Math.max(0, k.length - 45) * 0.1;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = rowKey;
     }
   }
 
-  return null;
+  return bestKey;
 };
 
 // Поиск столбца с артикулом
@@ -165,36 +197,98 @@ const findCodeColumnInDeliveryData = (row: any): string | null => {
   return null;
 };
 
-// Поиск совпадений для стандартного сценария
-const findMatchingDataStandard = (
-  timeRow: any,
-  articleToCodeMap: Map<string, string>,
-  timeArticleColumn: string,
-  timeProcessingColumn: string | null
-): {
-  code: string | null;
-  processingValue: string | null;
-  hasMatch: boolean;
-} => {
-  const timeArticle = normalizeValue(timeRow[timeArticleColumn]);
-  if (!timeArticle) {
-    return { code: null, processingValue: null, hasMatch: false };
+// Более строгий поиск "Код" для случая, когда в файле одновременно есть "Код" и "Артикул".
+// Нам важно не перепутать "Артикул" с "Код".
+const findCodeColumnInRow = (row: any): string | null => {
+  if (!row) return null;
+  const rowKeys = Object.keys(row);
+
+  // 1) точное совпадение "Код"
+  const exactCode = rowKeys.find((k) => normalizeColumnName(k) === normalizeColumnName("Код"));
+  if (exactCode) return exactCode;
+
+  // 2) точные варианты "Код ...", но без "артикул"
+  const exactCandidates = [
+    "Код позиции",
+    "Код товара",
+    "Код продукции",
+    "Код изделия",
+    "SKU",
+    "Product code",
+  ];
+  for (const cand of exactCandidates) {
+    const found = rowKeys.find((k) => normalizeColumnName(k) === normalizeColumnName(cand));
+    if (found) return found;
   }
 
-  const code = articleToCodeMap.get(timeArticle);
-  if (code) {
-    let processingValue = "!!!";
-    if (timeProcessingColumn) {
-      processingValue = processProcessingValue(timeRow[timeProcessingColumn]);
+  // 3) частично: содержит "код" и не содержит "артикул"
+  const partial = rowKeys.find((k) => {
+    const nk = normalizeColumnName(k);
+    if (nk.includes("артикул")) return false;
+    // ru
+    if (nk.includes("код")) return true;
+    // en
+    if (nk.includes("code") && !nk.includes("article")) return true;
+    return false;
+  });
+  return partial ?? null;
+};
+
+// Поиск столбца с текущим сроком/обработкой в deliveryData
+const findExistingProcessingColumnInDeliveryData = (row: any): string | null => {
+  const possibleNames = [
+    "Обработка",
+    "Срок Готовн Отгр (Обработка)",
+    "Срок готовн отгр (обработка)",
+    "Срок",
+    "Сроки",
+    "Срок поставки",
+    "Срок производства",
+  ];
+
+  const rowKeys = Object.keys(row || {});
+
+  for (const columnName of possibleNames) {
+    const normalizedColumnName = normalizeColumnName(columnName);
+    for (const rowKey of rowKeys) {
+      const normalizedRowKey = normalizeColumnName(rowKey);
+      if (normalizedRowKey === normalizedColumnName) {
+        return rowKey;
+      }
     }
-    return {
-      code,
-      processingValue,
-      hasMatch: true,
-    };
   }
 
-  return { code: null, processingValue: null, hasMatch: false };
+  // Частичный поиск с приоритетом "готовн/отгр" и исключением "предварительная обработка"
+  let bestKey: string | null = null;
+  let bestScore = -Infinity;
+
+  for (const rowKey of rowKeys) {
+    const k = normalizeColumnName(rowKey);
+    if (k.includes("предвар")) continue;
+
+    const hasDeadlineWords =
+      k.includes("срок") ||
+      k.includes("готовн") ||
+      k.includes("отгр") ||
+      k.includes("обработк");
+
+    if (!hasDeadlineWords) continue;
+
+    let score = 0;
+    if (k.includes("готовн")) score += 70;
+    if (k.includes("отгр")) score += 70;
+    if (k.includes("обработк")) score += 40;
+    if (k.includes("срок")) score += 20;
+    score -= Math.max(0, k.length - 45) * 0.1;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = rowKey;
+    }
+  }
+
+  return bestKey;
+
 };
 
 // Создание хэш-таблицы артикул -> код
@@ -202,22 +296,35 @@ const createArticleToCodeMap = (
   deliveryData: any[]
 ): {
   map: Map<string, string>;
+  processingMap: Map<string, string>;
   articleColumn: string | null;
   codeColumn: string | null;
 } => {
   if (!deliveryData || deliveryData.length === 0) {
-    return { map: new Map(), articleColumn: null, codeColumn: null };
+    return {
+      map: new Map(),
+      processingMap: new Map(),
+      articleColumn: null,
+      codeColumn: null,
+    };
   }
 
   const firstRow = deliveryData[0];
   const articleColumn = findArticleColumn(firstRow);
   const codeColumn = findCodeColumnInDeliveryData(firstRow);
+  const processingColumn = findExistingProcessingColumnInDeliveryData(firstRow);
 
   if (!articleColumn || !codeColumn) {
-    return { map: new Map(), articleColumn, codeColumn };
+    return {
+      map: new Map(),
+      processingMap: new Map(),
+      articleColumn,
+      codeColumn,
+    };
   }
 
   const map = new Map<string, string>();
+  const processingMap = new Map<string, string>();
 
   for (let i = 0; i < deliveryData.length; i++) {
     const row = deliveryData[i];
@@ -226,10 +333,14 @@ const createArticleToCodeMap = (
 
     if (article && code) {
       map.set(article, code);
+      if (processingColumn) {
+        const existingProcessing = canonicalProcessingValue(row[processingColumn]);
+        processingMap.set(article, existingProcessing);
+      }
     }
   }
 
-  return { map, articleColumn, codeColumn };
+  return { map, processingMap, articleColumn, codeColumn };
 };
 
 // Публичная функция: построение allData для FileFormationTwo
@@ -237,63 +348,73 @@ export const buildStandardAllData = (
   deliveryTimeData: any[],
   deliveryData: any[]
 ): any[] => {
-  console.time("Create hash map");
-  const {
-    map: articleToCodeMap,
-    articleColumn,
-    codeColumn,
-  } = createArticleToCodeMap(deliveryData);
-  console.timeEnd("Create hash map");
+  if (!deliveryTimeData || deliveryTimeData.length === 0) return [];
+  if (!deliveryData || deliveryData.length === 0) return [];
 
-  if (!articleColumn || !codeColumn || articleToCodeMap.size === 0) {
-    console.log("Нет данных для формирования файла");
-    return [];
-  }
-
-  console.log(`Создана хэш-таблица с ${articleToCodeMap.size} записями`);
+  const csValues = ["R01", "R31", "R77", "R04", "R02", "R29", "R19", "V30"];
+  const copyCount = csValues.length;
 
   const firstTimeRow = deliveryTimeData[0];
-  const timeArticleColumn = findCodeColumnInDeliveryData(firstTimeRow);
+  const timeCodeColumn = findCodeColumnInRow(firstTimeRow);
   const timeProcessingColumn = findProcessingColumnInDeliveryTime(firstTimeRow);
 
-  if (!timeArticleColumn) {
-    console.log("Не найден столбец с артикулом в файле поставщика");
+  if (!timeCodeColumn || !timeProcessingColumn) {
+    console.log("Нет ключевых столбцов в DeliveryTime (Код/Срок)");
     return [];
   }
 
-  console.time("Filter and process data");
-  const csValues = ["R01", "R31", "R77", "R04", "R02", "R29", "R19", "V30"];
-  const allData: any[] = [];
-  const copyCount = csValues.length;
-  const filteredTimeData: any[] = [];
+  const firstDeliveryRow = deliveryData[0];
+  const deliveryCodeColumn = findCodeColumnInRow(firstDeliveryRow);
+  const existingProcessingColumn = findExistingProcessingColumnInDeliveryData(firstDeliveryRow);
 
-  for (let i = 0; i < deliveryTimeData.length; i++) {
-    const timeRow = deliveryTimeData[i];
-    const matchResult = findMatchingDataStandard(
-      timeRow,
-      articleToCodeMap,
-      timeArticleColumn,
-      timeProcessingColumn
-    );
+  if (!deliveryCodeColumn) {
+    console.log("Не найден столбец 'Код' в DeliveryData");
+    return [];
+  }
 
-    if (matchResult.hasMatch) {
-      filteredTimeData.push({
-        row: timeRow,
-        code: matchResult.code,
-        processingValue: matchResult.processingValue,
-      });
+  // DeliveryData используем ТОЛЬКО для:
+  // сравнения (исключаем строки, где срок совпадает)
+  const existingProcessingByCode = new Map<string, string>();
+
+  for (let i = 0; i < deliveryData.length; i++) {
+    const row = deliveryData[i];
+    const code = normalizeValue(row[deliveryCodeColumn]);
+    if (!code) continue;
+
+    if (existingProcessingColumn) {
+      existingProcessingByCode.set(code, canonicalProcessingValue(row[existingProcessingColumn]));
     }
   }
 
-  console.log(
-    `Найдено ${filteredTimeData.length} совпадений из ${deliveryTimeData.length} строк`
-  );
+  console.time("Filter and process data (standard)");
+
+  const allData: any[] = [];
+  const filteredTimeRows: Array<{ code: string; processingValue: string }> = [];
+  let matchedCount = 0;
+  let excludedCount = 0;
+
+  for (let i = 0; i < deliveryTimeData.length; i++) {
+    const timeRow = deliveryTimeData[i];
+    const code = normalizeValue(timeRow[timeCodeColumn]);
+    if (!code) continue;
+
+    const processingValue = processProcessingValue(timeRow[timeProcessingColumn]);
+    const newCanonical = canonicalProcessingValue(processingValue);
+
+    const existing = existingProcessingByCode.get(code);
+    if (existing !== undefined) matchedCount++;
+    if (existing !== undefined && existing === newCanonical) {
+      excludedCount++;
+      continue;
+    }
+
+    filteredTimeRows.push({ code, processingValue });
+  }
 
   for (let copyIndex = 0; copyIndex < copyCount; copyIndex++) {
     const csValue = csValues[copyIndex];
-
-    for (let i = 0; i < filteredTimeData.length; i++) {
-      const item = filteredTimeData[i];
+    for (let i = 0; i < filteredTimeRows.length; i++) {
+      const item = filteredTimeRows[i];
       allData.push({
         ЦС: csValue,
         Код: item.code || "",
@@ -308,7 +429,14 @@ export const buildStandardAllData = (
     }
   }
 
-  console.timeEnd("Filter and process data");
+  console.timeEnd("Filter and process data (standard)");
+
+  // Метаданные для UI: например, чтобы понять, исключили ли мы все строки из-за совпадающих сроков.
+  (allData as any).__meta = {
+    matchedCount,
+    excludedCount,
+    excludedAll: matchedCount > 0 && excludedCount === matchedCount,
+  };
 
   if (allData.length === 0) {
     console.log("Нет данных для формирования файла");
@@ -762,6 +890,8 @@ export const buildDkc1200AllData = (
   }
 
   const allData: any[] = [];
+  let matchedCount = 0; // кандидаты, у которых найден срок по коду/артикулу
+  let excludedCount = 0; // кандидаты, которые исключили из-за совпадения "Обработка"
   const targetDepartment = "АО ДКС Сибирь".toLowerCase();
 
   for (let i = 0; i < deliveryData.length; i++) {
@@ -774,6 +904,7 @@ export const buildDkc1200AllData = (
 
     const processing = timeCodeToProcessing.get(article);
     if (!processing) continue; // нет совпадения по артикулу/коду
+    matchedCount++;
 
     // Доп. правило: если в DeliveryData уже есть "Обработка" и она совпадает со сроком из DeliveryTime,
     // то строку не добавляем в формируемый файл
@@ -782,6 +913,7 @@ export const buildDkc1200AllData = (
         row[deliveryProcessingColumn]
       );
       if (existingProcessing === processing) {
+        excludedCount++;
         continue;
       }
     }
@@ -798,6 +930,12 @@ export const buildDkc1200AllData = (
       Сообщение: "",
     });
   }
+
+  (allData as any).__meta = {
+    matchedCount,
+    excludedCount,
+    excludedAll: matchedCount > 0 && excludedCount === matchedCount,
+  };
 
   console.log(`DKC1200: сформировано ${allData.length} строк данных`);
   return allData;
@@ -888,6 +1026,8 @@ export const buildDkc1100AllData = (
   ]);
 
   const allData: any[] = [];
+  let matchedCount = 0; // кандидаты, у которых найден срок по коду/артикулу
+  let excludedCount = 0; // кандидаты, которые исключили из-за совпадения "Обработка"
 
   for (let i = 0; i < deliveryData.length; i++) {
     const row = deliveryData[i];
@@ -899,12 +1039,14 @@ export const buildDkc1100AllData = (
 
     const processing = timeCodeToProcessing.get(article);
     if (!processing) continue;
+    matchedCount++;
 
     if (deliveryProcessingColumn) {
       const existingProcessing = normalizeDkcProcessingValue(
         row[deliveryProcessingColumn],
       );
       if (existingProcessing === processing) {
+        excludedCount++;
         continue;
       }
     }
@@ -921,6 +1063,12 @@ export const buildDkc1100AllData = (
       Сообщение: "",
     });
   }
+
+  (allData as any).__meta = {
+    matchedCount,
+    excludedCount,
+    excludedAll: matchedCount > 0 && excludedCount === matchedCount,
+  };
 
   console.log(`DKC1100: сформировано ${allData.length} строк данных`);
   return allData;
@@ -994,6 +1142,8 @@ export const buildBettermanAllData = (
   // Сначала собираем валидные совпадения (без дублирования по ЦС),
   // затем раскладываем по ЦС так, чтобы в файле блоками шли R01, затем R31 и т.д.
   const matchedRows: Array<{ code: string; processing: string }> = [];
+  let matchedCount = 0; // кандидаты, у которых есть код и рассчитана "Обработка"
+  let excludedCount = 0; // кандидаты, которые исключили из-за совпадения "Обработка"
 
   for (let i = 0; i < deliveryData.length; i++) {
     const row = deliveryData[i];
@@ -1003,17 +1153,20 @@ export const buildBettermanAllData = (
     const processing = timeArticleToProcessing.get(article);
     if (!processing) continue;
 
+    const code = normalizeValue(row[deliveryCodeColumn]);
+    if (!code) continue;
+
+    matchedCount++;
+
     // Если в DeliveryData уже есть значение "Срок Готовн Отгр (Обработка)" и оно совпадает
     // с рассчитанной "Обработка" — строку не добавляем
     if (deliveryExistingProcessingColumn) {
       const existing = processProcessingValue(row[deliveryExistingProcessingColumn]);
       if (existing === processing) {
+        excludedCount++;
         continue;
       }
     }
-
-    const code = normalizeValue(row[deliveryCodeColumn]);
-    if (!code) continue;
 
     matchedRows.push({ code, processing });
   }
@@ -1033,6 +1186,12 @@ export const buildBettermanAllData = (
       });
     }
   }
+
+  (allData as any).__meta = {
+    matchedCount,
+    excludedCount,
+    excludedAll: matchedCount > 0 && excludedCount === matchedCount,
+  };
 
   console.log(`Betterman: сформировано ${allData.length} строк данных`);
   return allData;

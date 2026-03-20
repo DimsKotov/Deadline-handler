@@ -35,6 +35,8 @@ function MainLayout() {
   // Состояние для управления ошибками
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showInfo, setShowInfo] = useState(false);
+  const [infoMessage, setInfoMessage] = useState("");
 
   // Обработчик события ошибки из FileFormationOne
   useEffect(() => {
@@ -54,6 +56,36 @@ function MainLayout() {
       window.removeEventListener(
         "fileFormationError",
         handleFileFormationError as EventListener,
+      );
+    };
+  }, []);
+
+  // Обработчик события информационных уведомлений из FileFormation*
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const handleFileFormationInfo = (event: CustomEvent) => {
+      if (timer) window.clearTimeout(timer);
+      setInfoMessage(event.detail.message);
+      setShowInfo(true);
+      setShowError(false);
+      setErrorMessage("");
+      // Чтобы не мешало, убираем через несколько секунд
+      timer = window.setTimeout(() => {
+        setShowInfo(false);
+      }, 7000);
+    };
+
+    window.addEventListener(
+      "fileFormationInfo",
+      handleFileFormationInfo as EventListener,
+    );
+
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener(
+        "fileFormationInfo",
+        handleFileFormationInfo as EventListener,
       );
     };
   }, []);
@@ -227,6 +259,14 @@ function MainLayout() {
           <ErrorHandler text={errorMessage} />
         </div>
       )}
+
+      {/* Информационное уведомление (например, когда изменения отсутствуют) */}
+      <div
+        className={`${styles.infoHandler} ${showInfo ? styles.infoHandlerVisible : styles.infoHandlerHidden}`}
+        aria-live="polite"
+      >
+        <p className={styles.infoTitle}>{infoMessage}</p>
+      </div>
 
       {showFileFormationOne && (
         <FileFormationOne

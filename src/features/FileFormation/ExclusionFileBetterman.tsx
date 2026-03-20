@@ -69,10 +69,25 @@ const ExclusionFileBetterman: React.FC<ExclusionFileBettermanProps> = ({
       const allData = buildBettermanAllData(deliveryTimeData, deliveryData);
 
       if (allData.length === 0) {
-        console.log("ExclusionFileBetterman: нет данных для формирования файла");
-        if (onProcessingComplete) {
-          onProcessingComplete(false);
+        const meta = (allData as any).__meta as
+          | { excludedAll?: boolean; matchedCount?: number; excludedCount?: number }
+          | undefined;
+
+        if (meta?.excludedAll) {
+          window.dispatchEvent(
+            new CustomEvent("fileFormationInfo", {
+              detail: {
+                message:
+                  "Изменений нет: сроки из файла «Данные о поставках» уже совпадают со сроками поставщика (Betterman). Файл APEX сформирован не будет.",
+              },
+            }),
+          );
+          if (onProcessingComplete) onProcessingComplete(true);
+          return;
         }
+
+        console.log("ExclusionFileBetterman: нет данных для формирования файла");
+        if (onProcessingComplete) onProcessingComplete(false);
         return;
       }
 

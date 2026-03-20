@@ -129,12 +129,6 @@ const FileFormationOne: React.FC<FileFormationOneProps> = ({
     const firstRow = data[0];
     const missingColumns: string[] = [];
 
-    // Проверяем наличие столбца "ЦС"
-    const csColumn = findColumnByKeyword(firstRow, "ЦС");
-    if (!csColumn) {
-      missingColumns.push("ЦС");
-    }
-
     // Проверяем наличие столбца "Код"
     const codeColumn = findColumnByKeyword(firstRow, "Код");
     if (!codeColumn) {

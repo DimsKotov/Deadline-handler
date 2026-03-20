@@ -174,7 +174,29 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
       const allData = buildStandardAllData(deliveryTimeData, deliveryData);
       
       if (allData.length === 0) {
-        console.log("Нет данных для формирования файла");
+        const meta = (allData as any).__meta as
+          | { excludedAll?: boolean; matchedCount?: number; excludedCount?: number }
+          | undefined;
+
+        if (meta?.excludedAll) {
+          window.dispatchEvent(
+            new CustomEvent("fileFormationInfo", {
+              detail: {
+                message:
+                  "Изменений нет: сроки из файла «Данные о поставках» уже совпадают со сроками поставщика. Файл APEX сформирован не будет.",
+              },
+            }),
+          );
+
+          if (onProcessingComplete) {
+            onProcessingComplete(true);
+          }
+          return;
+        }
+
+        console.log(
+          "Нет данных для формирования файла (либо нет совпадений, либо не удалось исключить все строки).",
+        );
         if (onProcessingComplete) {
           onProcessingComplete(false);
         }
