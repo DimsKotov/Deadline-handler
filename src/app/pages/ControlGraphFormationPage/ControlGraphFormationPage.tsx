@@ -101,13 +101,16 @@ const fetchSheetRows = async (sheetName: string): Promise<ControlGraphRow[]> => 
   // На dev-сервере прокси может работать, но на production (GitHub Pages) прокси нет,
   // поэтому при неуспешном прокси (например, 404) делаем fallback на прямой Google URL.
   let response: Response | null = null;
+  let usedUrl = "";
 
   if (import.meta.env.DEV) {
     response = await tryFetch(proxiedUrl);
+    usedUrl = proxiedUrl;
   }
 
   if (!response || !response.ok) {
     response = await tryFetch(directUrl);
+    usedUrl = directUrl;
   }
 
   if (!response) {
@@ -124,7 +127,9 @@ const fetchSheetRows = async (sheetName: string): Promise<ControlGraphRow[]> => 
         "Google Sheet вернул 401 Unauthorized. Проверьте, что таблица доступна без логина (опубликована), либо что пользователь авторизован в Google."
       );
     }
-    throw new Error(`Не удалось получить данные Google Sheet (status=${response.status})`);
+    throw new Error(
+      `Не удалось получить данные Google Sheet (status=${response.status}) URL=${usedUrl}`
+    );
   }
 
   const text = await response.text();
