@@ -13,4 +13,16 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      // Прокси снимает CORS при запросах к Google Sheets из браузера (в dev-режиме).
+      // Используется только для локальной разработки.
+      "/google-sheets": {
+        target: "https://docs.google.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/google-sheets/, ""),
+      },
+    },
+  },
 })

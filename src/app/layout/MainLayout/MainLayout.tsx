@@ -8,7 +8,7 @@ import FileFormationOne from "../../../features/FileFormation/FileFormationOne";
 import FileFormationTwo from "../../../features/FileFormation/FileFormationTwo";
 import FileFormationNSI from "../../../features/FileFormation/FileFormationNSI.tsx";
 import ErrorHandler from "../../../features/ErrorHandler/ErrorHandler";
-import DivisionSwitch from "../../../features/DivisionSwitch/DivisionSwitch"; // Импорт нового компонента
+import DivisionSwitch from "../../../features/DivisionSwitch/DivisionSwitch";
 import ControlGraphFormationPage from "../../pages/ControlGraphFormationPage/ControlGraphFormationPage";
 import DispatcherWindowsFormationPage from "../../pages/DispatcherWindowsFormationPage/DispatcherWindowsFormationPage";
 
