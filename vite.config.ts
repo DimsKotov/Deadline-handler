@@ -23,6 +23,15 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/google-sheets/, ""),
       },
+      // Когда app загружена с base="/Deadline-handler/", фронтенд может обращаться
+      // к "/Deadline-handler/google-sheets/...". Добавляем второй матч.
+      "/Deadline-handler/google-sheets": {
+        target: "https://docs.google.com",
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) =>
+          path.replace(/^\/Deadline-handler\/google-sheets/, "/google-sheets"),
+      },
     },
   },
 })
