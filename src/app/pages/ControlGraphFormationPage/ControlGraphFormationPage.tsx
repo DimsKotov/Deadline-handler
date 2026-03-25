@@ -98,7 +98,17 @@ const fetchSheetRows = async (sheetName: string): Promise<ControlGraphRow[]> => 
     }
   };
 
-  const response = (await tryFetch(proxiedUrl)) ?? (await tryFetch(directUrl));
+  // На dev-сервере прокси может работать, но на production (GitHub Pages) прокси нет,
+  // поэтому при неуспешном прокси (например, 404) делаем fallback на прямой Google URL.
+  let response: Response | null = null;
+
+  if (import.meta.env.DEV) {
+    response = await tryFetch(proxiedUrl);
+  }
+
+  if (!response || !response.ok) {
+    response = await tryFetch(directUrl);
+  }
 
   if (!response) {
     throw new Error(
