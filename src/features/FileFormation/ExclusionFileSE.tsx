@@ -329,7 +329,7 @@ const ExclusionFileSE: React.FC<ExclusionFileSEProps> = ({
     
     // Определяем значения ЦС для каждого склада
     const moscowCS = ["R01", "R02", "R04", "R31", "R77", "V30"];
-    const ekaterinburgCS = ["R90", "R19"];
+    const ekaterinburgCS = ["R29", "R19"];
     
     const allData: any[] = [];
     

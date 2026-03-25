@@ -62,7 +62,7 @@ const Header = () => {
           end
           className={({ isActive }) => (isActive ? styles.tabActive : styles.tab)}
         >
-          Обработчик сроков готовности
+          Обработчик сроков обеспечения
         </NavLink>
         <NavLink
           to="/control-graph"
