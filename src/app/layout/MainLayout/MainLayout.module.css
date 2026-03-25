@@ -5,6 +5,12 @@
     justify-content: center;
 }
 
+.mainLayoutShell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .mainContainer {
     display: flex;
     gap: 100px;

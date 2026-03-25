@@ -5,7 +5,7 @@
   background-color: var(--clr-ui-background, #c4f1ae);
   min-height: 120px;
   position: relative;
-  border-bottom: 2px solid var(--clr-ui-text, #4aa31d); 
+  border-bottom: 2px solid var(--clr-ui-text, #4aa31d);
 }
 
 .logoContainer {
@@ -40,6 +40,69 @@
   padding: 10px 30px;
 }
 
+.tabsBar {
+  display: flex; 
+  
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  min-width: 300px;
+  padding: 0 22px;  
+  border: 2px solid var(--clr-ui-text, #4aa31d);  
+  color: var(--clr-ui-text, #4aa31d);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 24px;
+
+}
+
+.tabActive {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70px;
+  min-width: 300px;
+  padding: 0 22px;  
+  border: 2px solid var(--clr-ui-text, #4aa31d);  
+  color: #3a8117;
+  background-color:  #8bd764;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 24px;
+}
+
+.tab:first-child {  
+  border-right: none;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;    
+}
+
+.tab:last-child {  
+  border-left: none;  
+  border-top-right-radius: 12px;  
+  border-bottom-right-radius: 12px; 
+}
+
+.tabActive:first-child {
+  border-right: none;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;   
+}
+
+.tabActive:last-child {   
+  border-left: none;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.tab:hover {
+  background-color: #e4fcd8;
+}
+
 .instructionButton {
   background-color: transparent;
   border: 2px solid var(--clr-ui-text, #4aa31d);
@@ -62,25 +125,27 @@
 }
 
 .instructionModal {
-  position: absolute;  
+  position: absolute;
   right: 20px;
   top: 95px;
   background-color: #e4fcd8;
   border: 2px solid var(--clr-ui-text, #4aa31d);
   border-radius: 12px;
   padding: 20px;
-  z-index: 2;  
+  z-index: 2;
   max-width: 50vw;
   opacity: 0;
   transform: translateY(-10px);
   transition:
     opacity 0.3s ease,
     transform 0.3s ease;
-  pointer-events: none; /* отключение взаимодействия, когда скрыто */
+  pointer-events: none;
+  /* отключение взаимодействия, когда скрыто */
 }
 
 .instructionModal.show {
   opacity: 1;
   transform: translateY(0);
-  pointer-events: auto; /* включение взаимодействия при показе */
+  pointer-events: auto;
+  /* включение взаимодействия при показе */
 }

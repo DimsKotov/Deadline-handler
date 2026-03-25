@@ -22,6 +22,8 @@ const FileFormationOne: React.FC<FileFormationOneProps> = ({
   splitRowsLimit = 9990,
   supplierName = "",
 }) => {
+  // Сценарий "один файл":
+  // формируем APEX только из DeliveryTime (без сравнения со вторым файлом).
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
 

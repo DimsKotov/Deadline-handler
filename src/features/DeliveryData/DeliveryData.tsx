@@ -9,6 +9,10 @@ interface DeliveryDataProps {
 }
 
 const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
+  // Компонент загрузки "Данные о поставках":
+  // - принимает один Excel-файл,
+  // - парсит и валидирует ключевые столбцы,
+  // - сообщает родителю либо валидные данные, либо сброс состояния.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -35,23 +39,28 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
   };
 
   const processFile = async (file: File) => {
+    // Перед новой загрузкой очищаем прошлые статусы.
     setError(null);
     setSuccess(null);
     setFileName(null);
     setIsLoading(true); // Начинаем загрузку
 
     try {
+      // Парсим Excel в JSON и проверяем, что это действительно файл "Данные о поставках".
       const jsonData = await parseExcelFile(file);
       if (validateDeliveryDataColumns(jsonData)) {
+        // Успех: сохраняем имя и поднимаем данные наверх.
         setSuccess('Загружен корректный файл.');
         setFileName(file.name);
         onSuccess(jsonData);
       } else {
+        // Невалидный файл: показываем ошибку и очищаем состояние родителя.
         setError('Похоже данный файл не является "Данные о поставках".');
         resetFileInput();
         onReset();
       }
     } catch (err) {
+      // Ошибка чтения/парсинга файла.
       setError('Ошибка при чтении файла.');
       resetFileInput();
       onReset();
@@ -61,6 +70,7 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
   };
 
   const resetFileInput = () => {
+    // Полный сброс поля input и отображаемого имени файла.
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -72,6 +82,7 @@ const DeliveryData: React.FC<DeliveryDataProps> = ({ onSuccess, onReset }) => {
   };
 
   const handleClear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Ручная очистка пользователем: сбрасываем локальные статусы и данные у родителя.
     e.stopPropagation();
     setError(null);
     setSuccess(null);

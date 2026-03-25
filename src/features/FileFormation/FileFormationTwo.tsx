@@ -31,6 +31,10 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
   splitRowsLimit = 9990,
   supplierName = "",
 }) => {
+  // Компонент-оркестратор для режима "два файла":
+  // - определяет, какой сценарий применять (стандартный / DKC / Betterman / SE),
+  // - запускает соответствующую обработку,
+  // - управляет единоразовым стартом формирования по trigger.
   const hasDownloadedRef = useRef(false);
   const lastTriggerRef = useRef(downloadTrigger);
   const [useExclusionFile, setUseExclusionFile] = useState(false);
@@ -87,6 +91,7 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
   };
 
   useEffect(() => {
+    // Каждый новый trigger сбрасывает флаги, чтобы можно было запускать формирование повторно.
     if (downloadTrigger !== lastTriggerRef.current) {
       hasDownloadedRef.current = false;
       lastTriggerRef.current = downloadTrigger;
@@ -123,7 +128,7 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
         return;
       }
       
-      // Проверяем наличие особых столбцов
+      // Проверяем наличие особых столбцов (Москва/Екатеринбург) для ветки ExclusionFileSE.
       const specialColumns = checkForSpecialColumns(deliveryTimeData);
       setMoscowColumnFound(specialColumns.moscow);
       setEkaterinburgColumnFound(specialColumns.ekaterinburg);
@@ -173,7 +178,8 @@ const FileFormationTwo: React.FC<FileFormationTwoProps> = ({
     try {
       console.time('FileFormationTwo Processing');
       
-      // Создаем все данные через сервис
+      // Стандартная логика формирования: сервис возвращает уже готовые строки APEX
+      // с учетом фильтрации и исключения совпадающих сроков.
       const allData = buildStandardAllData(deliveryTimeData, deliveryData);
       
       if (allData.length === 0) {

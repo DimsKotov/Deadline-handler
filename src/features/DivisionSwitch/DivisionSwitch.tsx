@@ -36,14 +36,18 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
   onSplitRowsLimitChange,
   className = ''
 }) => {
+  // Локальное состояние переключателя (UI) и строкового ввода лимита строк.
+  // splitRowsInput держим строкой, чтобы корректно обрабатывать пустой ввод и ввод "в процессе".
   const [enabled, setEnabled] = useState<boolean>(isEnabled);
   const [splitRowsInput, setSplitRowsInput] = useState<string>(String(splitRowsLimit));
 
   useEffect(() => {
+    // Синхронизируем текст в поле, если значение лимита пришло извне через пропсы.
     setSplitRowsInput(String(splitRowsLimit));
   }, [splitRowsLimit]);
 
   const handleToggle = () => {
+    // Переключаем режим разбиения и уведомляем родителя о новом состоянии.
     const newState = !enabled;
     setEnabled(newState);
     
@@ -65,10 +69,14 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
   };
 
   const handleSupplierInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Проксируем изменение названия поставщика в родительский компонент.
     onSupplierNameChange?.(e.target.value);
   };
 
   const handleSplitRowsInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // На onChange принимаем "сырой" ввод:
+    // - сразу показываем в поле,
+    // - валидное положительное число сразу отправляем наверх.
     const raw = e.target.value;
     setSplitRowsInput(raw);
     if (raw === '') {
@@ -81,6 +89,10 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
   };
 
   const handleSplitRowsBlur = () => {
+    // На blur приводим значение к нормальной форме:
+    // - пустое -> дефолт 9990,
+    // - невалидное -> откат к текущему splitRowsLimit,
+    // - валидное -> целое положительное число.
     const trimmed = splitRowsInput.trim();
     if (trimmed === '') {
       setSplitRowsInput('9990');
@@ -101,6 +113,7 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
 
   return (
     <div className={`${styles.container} ${className}`}>
+      {/* Блок текущего состояния переключателя и краткого описания режима. */}
       <div className={styles.labelContainer}>
         <span className={styles.label}>{getSwitchLabel()}</span>
         <span className={styles.description}>
@@ -119,6 +132,7 @@ const DivisionSwitch: React.FC<DivisionSwitchProps> = ({
           <div className={styles.switchThumb} />
         </div>
       </button>
+      {/* Дополнительные настройки формирования файлов. */}
       <div className={styles.inputsBlock}>
         <label className={styles.inputLabel}>
           Название поставщика

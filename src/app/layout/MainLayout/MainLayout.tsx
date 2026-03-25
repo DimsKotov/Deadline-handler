@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import styles from "./MainLayout.module.css";
 import DeliveryData from "../../../features/DeliveryData/DeliveryData";
 import DeliveryTime from "../../../features/DeliveryTime/DeliveryTime";
@@ -8,8 +9,10 @@ import FileFormationTwo from "../../../features/FileFormation/FileFormationTwo";
 import FileFormationNSI from "../../../features/FileFormation/FileFormationNSI.tsx";
 import ErrorHandler from "../../../features/ErrorHandler/ErrorHandler";
 import DivisionSwitch from "../../../features/DivisionSwitch/DivisionSwitch"; // Импорт нового компонента
+import ControlGraphFormationPage from "../../pages/ControlGraphFormationPage/ControlGraphFormationPage";
+import DispatcherWindowsFormationPage from "../../pages/DispatcherWindowsFormationPage/DispatcherWindowsFormationPage";
 
-function MainLayout() {
+function ReadinessHandlerPage() {
   const [deliveryDataReady, setDeliveryDataReady] = useState(false);
   const [deliveryTimeReady, setDeliveryTimeReady] = useState(false);
   const [deliveryData, setDeliveryData] = useState<any[]>([]);
@@ -306,5 +309,21 @@ function MainLayout() {
     </div>
   );
 }
+
+const MainLayout = () => {
+  return (
+    <div className={styles.mainLayoutShell}>
+      <Routes>
+        <Route path="/" element={<ReadinessHandlerPage />} />
+        <Route path="/control-graph" element={<ControlGraphFormationPage />} />
+        <Route
+          path="/dispatcher-windows"
+          element={<DispatcherWindowsFormationPage />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  );
+};
 
 export default MainLayout;

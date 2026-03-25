@@ -13,6 +13,10 @@ interface DeliveryTimeProps {
 }
 
 const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
+  // Компонент загрузки сроков поставщика:
+  // - поддерживает drag&drop и выбор через input,
+  // - принимает до двух файлов (для отдельных сценариев поставщиков),
+  // - валидирует столбцы и передает родителю исходные источники + агрегированные данные.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -42,6 +46,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
   };
 
   const getPreferredSheetName = (fileName: string): string | undefined => {
+    // Для некоторых поставщиков данные лежат на конкретных листах.
     const lower = fileName.toLowerCase();
     if (lower.includes("betterman") || lower.includes("беттерман")) {
       return "Прайс-лист";
@@ -53,6 +58,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
   };
 
   const processFiles = async (files: File[]) => {
+    // Перед новой попыткой загрузки очищаем предыдущие статусы.
     setError(null);
     setSuccess(null);
     setIsLoading(true); // Начинаем загрузку
@@ -65,6 +71,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
       const baseLoaded = loadedFiles.length >= 2 ? [] : [...loadedFiles];
 
       for (const file of incomingFiles) {
+        // Парсим файл с учетом предпочтительного листа и валидируем структуру.
         const preferredSheetName = getPreferredSheetName(file.name);
         const jsonData = await parseExcelFile(file, { preferredSheetName });
         if (!validateDeliveryTimeColumns(jsonData)) {
@@ -105,6 +112,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
 
       const mergedData: any[] = [];
       if (!(baseLoaded.length === 2 && hasBothDkc && baseLoaded.every((f) => isDkc(f.name)))) {
+        // Для большинства кейсов объединяем строки всех загруженных файлов в один массив.
         for (const f of baseLoaded) {
           mergedData.push(...f.data);
         }
@@ -119,6 +127,10 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
           : "Загружен корректный файл.",
       );
       setFileName(combinedName);
+      // Передаем родителю:
+      // - mergedData (для сценариев, где уместно объединение),
+      // - combinedName (для UI),
+      // - baseLoaded (оригинальные источники для специальных правил).
       onSuccess(mergedData, combinedName, baseLoaded);
     } catch (err) {
       setError('Ошибка при чтении файла.');
@@ -131,6 +143,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
   };
 
   const resetFileInput = () => {
+    // Полный локальный сброс выбранных файлов.
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -142,6 +155,7 @@ const DeliveryTime: React.FC<DeliveryTimeProps> = ({ onSuccess, onReset }) => {
   };
 
   const handleClear = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Ручной сброс пользователем: очищаем локальное и родительское состояние.
     e.stopPropagation();
     setError(null);
     setSuccess(null);

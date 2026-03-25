@@ -59,6 +59,8 @@ export const createExcelBlob = (
   sheetName: string,
   options?: { pruneEmptyCells?: boolean }
 ): Blob => {
+  // Универсальная "простая" сборка Excel без шаблона.
+  // Используется там, где не требуется перенос визуального оформления.
   const pruneEmptyCells = options?.pruneEmptyCells ?? true;
 
   // Оптимизация размера: не создаем ячейки для пустых значений.
@@ -92,6 +94,8 @@ export const createExcelBlob = (
 };
 
 const normalizeHeaderText = (value: any): string => {
+  // Нормализация текста заголовка для надежного сравнения:
+  // убираем лишние пробелы и приводим к нижнему регистру.
   const s = String(value ?? "").trim();
   return s.replace(/\s+/g, " ").toLowerCase();
 };
@@ -104,6 +108,8 @@ export const createApexExcelBlobFromTemplate = async (
   templateFileName: string,
   _sheetNameFallback = "Импортированные данные",
 ): Promise<Blob> => {
+  // ВАЖНО: APEX формируем только по шаблону.
+  // Никакого fallback на "простую" генерацию здесь нет.
   console.log("[APEX Template][exceljs] Start", {
     templateFileName,
     rows: data?.length ?? 0,
@@ -127,6 +133,7 @@ export const createApexExcelBlobFromTemplate = async (
   if (!ws) throw new Error("В шаблоне не найдена таблица");
 
   const headerByNormalized = new Map<string, string>();
+  // Строим словарь ожидаемых заголовков, чтобы привязаться к колонкам шаблона.
   for (const h of headers) headerByNormalized.set(normalizeHeaderText(h), h);
 
   // 1) Ищем строку заголовков и мап колонок
@@ -141,6 +148,7 @@ export const createApexExcelBlobFromTemplate = async (
     let hasCs = false;
     const candidate = new Map<string, number>();
 
+    // Сканируем только непустые ячейки строки и ищем соответствия ожидаемым заголовкам.
     row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
       const cellValue = cell.value as any;
       const text =
@@ -197,6 +205,7 @@ export const createApexExcelBlobFromTemplate = async (
   }
 
   if (headerRowNumber === null || colMap.size === 0) {
+    // Без найденной шапки корректно заполнить шаблон невозможно.
     throw new Error(`Не найдены заголовки в шаблоне: ${templateFileName}`);
   }
 
@@ -207,6 +216,7 @@ export const createApexExcelBlobFromTemplate = async (
   // Чтобы гарантированно не тащить хвосты пустых строк/внутренние range'ы шаблона,
   // создаём новый лист только с нужным диапазоном данных.
   const outWb = new ExcelJS.Workbook();
+  // Новый лист создаем намеренно, чтобы не переносить "хвосты" пустых строк из исходного шаблона.
   const outWs = outWb.addWorksheet(ws.name);
 
   const colsArr = Array.from(colMap.values());
@@ -242,7 +252,7 @@ export const createApexExcelBlobFromTemplate = async (
       return !(v === "" || v === null || v === undefined);
     });
 
-    if (!anyFilled) continue; // не создаём строку вообще
+    if (!anyFilled) continue; // полностью пустые строки не создаем
 
     for (const h of headers) {
       const col = colMap.get(h);
@@ -250,6 +260,7 @@ export const createApexExcelBlobFromTemplate = async (
 
       const srcCell = ws.getCell(templateStyleRow, col);
       if (srcCell?.style) {
+        // Копируем стиль "как в шаблоне" для каждого заполняемого столбца.
         outWs.getCell(targetRow, col).style = JSON.parse(JSON.stringify(srcCell.style));
       }
 
@@ -260,6 +271,7 @@ export const createApexExcelBlobFromTemplate = async (
   }
 
   const outBuffer = await outWb.xlsx.writeBuffer();
+  // Возвращаем blob для скачивания через браузер.
   return new Blob([outBuffer], { type: "application/octet-stream" });
 };
 

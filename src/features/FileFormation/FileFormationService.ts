@@ -197,43 +197,6 @@ const findCodeColumnInDeliveryData = (row: any): string | null => {
   return null;
 };
 
-// Более строгий поиск "Код" для случая, когда в файле одновременно есть "Код" и "Артикул".
-// Нам важно не перепутать "Артикул" с "Код".
-const findCodeColumnInRow = (row: any): string | null => {
-  if (!row) return null;
-  const rowKeys = Object.keys(row);
-
-  // 1) точное совпадение "Код"
-  const exactCode = rowKeys.find((k) => normalizeColumnName(k) === normalizeColumnName("Код"));
-  if (exactCode) return exactCode;
-
-  // 2) точные варианты "Код ...", но без "артикул"
-  const exactCandidates = [
-    "Код позиции",
-    "Код товара",
-    "Код продукции",
-    "Код изделия",
-    "SKU",
-    "Product code",
-  ];
-  for (const cand of exactCandidates) {
-    const found = rowKeys.find((k) => normalizeColumnName(k) === normalizeColumnName(cand));
-    if (found) return found;
-  }
-
-  // 3) частично: содержит "код" и не содержит "артикул"
-  const partial = rowKeys.find((k) => {
-    const nk = normalizeColumnName(k);
-    if (nk.includes("артикул")) return false;
-    // ru
-    if (nk.includes("код")) return true;
-    // en
-    if (nk.includes("code") && !nk.includes("article")) return true;
-    return false;
-  });
-  return partial ?? null;
-};
-
 // Поиск столбца с текущим сроком/обработкой в deliveryData
 const findExistingProcessingColumnInDeliveryData = (row: any): string | null => {
   const possibleNames = [
@@ -348,6 +311,11 @@ export const buildStandardAllData = (
   deliveryTimeData: any[],
   deliveryData: any[]
 ): any[] => {
+  // Стандартная логика формирования нового APEX (когда загружены оба файла):
+  // - DeliveryData: всегда "Артикул" и всегда "Код"
+  // - DeliveryTime: колонка с артикулом может называться иначе (артикул/код/артикул поставщика/артикул товара/референс)
+  // - Если артикулы совпали, то в APEX в колонку "Код" нужно вставить DeliveryData."Код"
+  // - Строку исключаем только когда по этому же артикулу срок/обработка совпали
   if (!deliveryTimeData || deliveryTimeData.length === 0) return [];
   if (!deliveryData || deliveryData.length === 0) return [];
 
@@ -355,34 +323,98 @@ export const buildStandardAllData = (
   const copyCount = csValues.length;
 
   const firstTimeRow = deliveryTimeData[0];
-  const timeCodeColumn = findCodeColumnInRow(firstTimeRow);
-  const timeProcessingColumn = findProcessingColumnInDeliveryTime(firstTimeRow);
-
-  if (!timeCodeColumn || !timeProcessingColumn) {
-    console.log("Нет ключевых столбцов в DeliveryTime (Код/Срок)");
-    return [];
-  }
-
   const firstDeliveryRow = deliveryData[0];
-  const deliveryCodeColumn = findCodeColumnInRow(firstDeliveryRow);
-  const existingProcessingColumn = findExistingProcessingColumnInDeliveryData(firstDeliveryRow);
 
-  if (!deliveryCodeColumn) {
-    console.log("Не найден столбец 'Код' в DeliveryData");
+  // 1) DeliveryData: строго по "Артикул" и "Код" (с нормализацией пробелов/регистра)
+  const deliveryKeys = Object.keys(firstDeliveryRow || {});
+  const deliveryArticleColumn =
+    deliveryKeys.find((k) => normalizeColumnName(k) === normalizeColumnName("Артикул")) || null;
+  const deliveryCodeColumn =
+    deliveryKeys.find((k) => normalizeColumnName(k) === normalizeColumnName("Код")) || null;
+
+  const existingProcessingColumn = findExistingProcessingColumnInDeliveryData(firstDeliveryRow);
+  if (!deliveryArticleColumn || !deliveryCodeColumn || !existingProcessingColumn) {
+    console.log("Нет обязательных столбцов в DeliveryData (Артикул/Код/Срок/Обработка)");
     return [];
   }
 
-  // DeliveryData используем ТОЛЬКО для:
-  // сравнения (исключаем строки, где срок совпадает)
-  const existingProcessingByCode = new Map<string, string>();
+  // 2) DeliveryTime: ищем колонку с артикулом (точно -> частично)
+  const findTimeArticleColumn = (row: any): string | null => {
+    const rowKeys = Object.keys(row || {});
+
+    const exactCandidates = [
+      "Артикул",
+      "Код",
+      "Артикул поставщика",
+      "Артикул товара",
+      "Референс",
+    ];
+    for (const cand of exactCandidates) {
+      const normalizedCand = normalizeColumnName(cand);
+      const found = rowKeys.find((k) => normalizeColumnName(k) === normalizedCand);
+      if (found) return found;
+    }
+
+    // Если точных нет — выбираем лучшую по смыслу колонку:
+    // "артикул" / "референс" / "код" (как артикул), но не столбец сроков/обработки.
+    let bestKey: string | null = null;
+    let bestScore = -Infinity;
+    for (const k of rowKeys) {
+      const nk = normalizeColumnName(k);
+      if (!nk) continue;
+
+      if (nk.includes("срок") || nk.includes("обработ") || nk.includes("отгр")) continue;
+
+      let score = 0;
+      if (nk.includes("артикул")) score += 70;
+      if (nk.includes("референс")) score += 60;
+      if (nk.includes("поставщика")) score += 25;
+      if (nk.includes("товара")) score += 25;
+      if (nk === "код") score += 50;
+      if (nk.includes("код")) score += 10;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = k;
+      }
+    }
+    return bestKey;
+  };
+
+  const timeArticleColumn = findTimeArticleColumn(firstTimeRow);
+  const timeProcessingColumn = findProcessingColumnInDeliveryTime(firstTimeRow);
+  if (!timeArticleColumn || !timeProcessingColumn) {
+    console.log("Нет ключевых столбцов в DeliveryTime (Артикул/Срок/Обработка)");
+    return [];
+  }
+
+  // 3) DeliveryData: Артикул -> Код, Артикул -> существующий срок/обработка (канонический)
+  const articleToCode = new Map<string, string>();
+  const articleToExistingCanonicalProcessing = new Map<string, string>();
+
+  // Единый ключ для сопоставления артикулов:
+  // - тримим пробелы
+  // - схлопываем подряд идущие пробелы (бывают двойные/неразрывные)
+  // - приводим к верхнему регистру
+  const toArticleKey = (v: any): string => {
+    const s = normalizeValue(v).replace(/\u00A0/g, " "); // NBSP -> обычный пробел
+    return s.replace(/\s+/g, " ").toUpperCase();
+  };
 
   for (let i = 0; i < deliveryData.length; i++) {
     const row = deliveryData[i];
-    const code = normalizeValue(row[deliveryCodeColumn]);
-    if (!code) continue;
+    const article = normalizeValue(row[deliveryArticleColumn]);
+    if (!article) continue;
+    const articleKey = toArticleKey(article);
 
-    if (existingProcessingColumn) {
-      existingProcessingByCode.set(code, canonicalProcessingValue(row[existingProcessingColumn]));
+    const code = normalizeValue(row[deliveryCodeColumn]);
+    if (code && !articleToCode.has(articleKey)) {
+      articleToCode.set(articleKey, code);
+    }
+
+    const existingCanonical = canonicalProcessingValue(row[existingProcessingColumn]);
+    if (!articleToExistingCanonicalProcessing.has(articleKey)) {
+      articleToExistingCanonicalProcessing.set(articleKey, existingCanonical);
     }
   }
 
@@ -395,20 +427,31 @@ export const buildStandardAllData = (
 
   for (let i = 0; i < deliveryTimeData.length; i++) {
     const timeRow = deliveryTimeData[i];
-    const code = normalizeValue(timeRow[timeCodeColumn]);
-    if (!code) continue;
+    const timeArticle = normalizeValue(timeRow[timeArticleColumn]);
+    if (!timeArticle) continue;
+    const timeArticleKey = toArticleKey(timeArticle);
 
     const processingValue = processProcessingValue(timeRow[timeProcessingColumn]);
     const newCanonical = canonicalProcessingValue(processingValue);
 
-    const existing = existingProcessingByCode.get(code);
-    if (existing !== undefined) matchedCount++;
-    if (existing !== undefined && existing === newCanonical) {
-      excludedCount++;
-      continue;
+    const existingCanonical = articleToExistingCanonicalProcessing.get(timeArticleKey);
+
+    // Если артикул есть в DeliveryData — сравниваем сроки.
+    if (existingCanonical !== undefined) {
+      matchedCount++;
+      if (existingCanonical === newCanonical) {
+        excludedCount++;
+        continue; // срок совпал -> строку исключаем
+      }
     }
 
-    filteredTimeRows.push({ code, processingValue });
+    // Артикул может совпасть даже без срока (или вообще не совпасть) — но код кладем ТОЛЬКО по DeliveryData.
+    const outputCode = articleToCode.get(timeArticleKey) || "";
+    // Если код не удалось замаппить, лучше пропустить строку,
+    // чем получить пустую "Код" при заполненной "Обработка".
+    if (!outputCode) continue;
+
+    filteredTimeRows.push({ code: outputCode, processingValue });
   }
 
   for (let copyIndex = 0; copyIndex < copyCount; copyIndex++) {
@@ -417,7 +460,7 @@ export const buildStandardAllData = (
       const item = filteredTimeRows[i];
       allData.push({
         ЦС: csValue,
-        Код: item.code || "",
+        Код: item.code,
         Тип: "",
         Организация: "",
         "Предварительная обработка": "",
@@ -431,18 +474,11 @@ export const buildStandardAllData = (
 
   console.timeEnd("Filter and process data (standard)");
 
-  // Метаданные для UI: например, чтобы понять, исключили ли мы все строки из-за совпадающих сроков.
   (allData as any).__meta = {
     matchedCount,
     excludedCount,
     excludedAll: matchedCount > 0 && excludedCount === matchedCount,
   };
-
-  if (allData.length === 0) {
-    console.log("Нет данных для формирования файла");
-  } else {
-    console.log(`Сформировано ${allData.length} строк данных`);
-  }
 
   return allData;
 };
@@ -526,6 +562,10 @@ export const buildExclusionAllData = (
   deliveryTimeData: any[],
   deliveryData: any[]
 ): any[] => {
+  // SE-сценарий:
+  // - используем отдельные сроки для Москвы и Екатеринбурга,
+  // - применяем разные наборы ЦС для каждого склада,
+  // - формируем итоговые строки только по пересечению с DeliveryData.
   console.time("Create hash map");
   const {
     map: articleToCodeMap,
@@ -694,6 +734,10 @@ export const buildDkcAllData = (
   deliveryData: any[],
   allowedCs: string[]
 ): any[] => {
+  // Базовый DKC-сценарий:
+  // - ограничиваем DeliveryData нужным отделением,
+  // - находим совпадения по артикулу,
+  // - разворачиваем результат по разрешенному списку ЦС.
   console.time("Create hash map (DKC)");
 
   if (!deliveryData || deliveryData.length === 0) {
@@ -823,6 +867,10 @@ export const buildDkc1200AllData = (
   deliveryTimeData: any[],
   deliveryData: any[],
 ): any[] => {
+  // DKC1200:
+  // - срок берем из DeliveryTime по коду/артикулу,
+  // - ЦС/Код берем из DeliveryData,
+  // - совпадающие текущие сроки исключаем.
   if (!deliveryTimeData || deliveryTimeData.length === 0) {
     console.log("DKC1200: DeliveryTimeData пуст");
     return [];
@@ -946,6 +994,7 @@ export const buildDkc1100AllData = (
   deliveryTimeData: any[],
   deliveryData: any[],
 ): any[] => {
+  // DKC1100: похож на DKC1200, но с собственным списком валидных отделений.
   if (!deliveryTimeData || deliveryTimeData.length === 0) {
     console.log("DKC1100: DeliveryTimeData пуст");
     return [];
@@ -1080,6 +1129,10 @@ export const buildBettermanAllData = (
   deliveryTimeData: any[],
   deliveryData: any[],
 ): any[] => {
+  // Betterman:
+  // - срок "Обработка" вычисляется через "Категория поставки" (A/B/C/D),
+  // - сравнивается с текущим значением в DeliveryData,
+  // - в результат идут только реальные изменения.
   if (!deliveryTimeData || deliveryTimeData.length === 0) {
     console.log("Betterman: DeliveryTimeData пуст");
     return [];
