@@ -352,7 +352,10 @@ const createControlGraphBlobFromTemplate = async (
   }
 
   const outBuffer = await outWb.xlsx.writeBuffer();
-  return new Blob([outBuffer], { type: "application/octet-stream" });
+  // Правильный MIME для .xlsx: уменьшает вероятность "Save As" диалога.
+  return new Blob([outBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
 };
 
 function Dropdown<T extends string | number>({
