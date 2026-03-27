@@ -113,6 +113,10 @@
   gap: 10px;
 }
 
+.dropdownTrigger:hover {
+  background-color: #e4fcd8;
+}
+
 .dropdownValue {
   color: var(--clr-ui-text, #4aa31d);
   font-weight: 600;

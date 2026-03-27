@@ -15,9 +15,76 @@ export const monthNames = [
   "Декабрь",
 ];
 
-const TEMPLATE_FILE_NAME = "Шаблон для загрузки окон диспетчера Екатеринбург.xlsx";
+const TEMPLATE_FILE_NAME = "Шаблон для загрузки окон диспетчера.xlsx";
 const GOOGLE_SHEET_ID = "1AzkcQ83jOuf0WH5v0TdNFHG8CJZf6kDJ";
-const GOOGLE_SHEET_TAB = "Екатеринбург";
+
+type SheetRuleConfig = {
+  sheetName: string;
+  sourceSheetName?: string;
+  removeNightRowExceptMonday: boolean;
+  dlInterval?: string;
+  bsInterval?: string;
+  pekInterval?: string;
+  skipNoteMarkers?: string[];
+  onlyNoteMarkers?: string[];
+  fillMode?: "default" | "columnEOnly";
+  kppStartCol?: string;
+  kppEndCol?: string;
+  defaultStartCol?: string;
+  markerCol?: string;
+  dlStartCol?: string;
+};
+
+const SHEET_RULES: SheetRuleConfig[] = [
+  {
+    sheetName: "Екатеринбург",
+    removeNightRowExceptMonday: true,
+  },
+  {
+    sheetName: "Сибирь",
+    removeNightRowExceptMonday: false,
+    dlInterval: "9:00-13:00",
+    bsInterval: "14:00-18:00",
+    pekInterval: "14:00-18:00",
+  },
+  {
+    sheetName: "Тверь",
+    removeNightRowExceptMonday: true,
+    skipNoteMarkers: ["перемерки"],
+  },
+  {
+    sheetName: "Тула",
+    removeNightRowExceptMonday: true,
+    skipNoteMarkers: ["перемерки"],
+  },
+  {
+    sheetName: "Ростов",
+    removeNightRowExceptMonday: true,
+    skipNoteMarkers: ["перемерки"],
+  },
+  {
+    sheetName: "Самара",
+    removeNightRowExceptMonday: true,
+    skipNoteMarkers: ["перемерки"],
+  },
+  {
+    sheetName: "Москва",
+    removeNightRowExceptMonday: true,
+    skipNoteMarkers: ["перемерки"],
+    kppStartCol: "E",
+    kppEndCol: "I",
+    defaultStartCol: "J",
+    markerCol: "J",
+    dlStartCol: "K",
+  },
+  {
+    sheetName: "Тверь(Перемерки)",
+    sourceSheetName: "Тверь",
+    removeNightRowExceptMonday: true,
+    onlyNoteMarkers: ["перемерки"],
+    fillMode: "columnEOnly",
+  },
+];
 
 type DispatcherSourceRow = {
   weekday: string;
@@ -33,6 +100,13 @@ const normalizeHeader = (v: unknown): string =>
     .replace(/\s+/g, " ")
     .toLowerCase();
 
+const normalizeNameForMatch = (v: unknown): string =>
+  normalizeHeader(v).replace(/[^a-zа-я0-9]/gi, "");
+
+const SHEET_RULES_BY_PRIORITY = [...SHEET_RULES].sort(
+  (a, b) => normalizeNameForMatch(b.sheetName).length - normalizeNameForMatch(a.sheetName).length
+);
+
 const formatDate = (date: Date): string => {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -44,6 +118,20 @@ const formatWeekdayRu = (date: Date): string => {
   const weekdays = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
   return weekdays[date.getDay()];
 };
+
+const getIsoWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
+const hasWeekMarkNch = (note: string): boolean =>
+  /(^|[^а-яa-z0-9])нч($|[^а-яa-z0-9])/i.test(note);
+
+const hasWeekMarkCh = (note: string): boolean =>
+  /(^|[^а-яa-z0-9])ч($|[^а-яa-z0-9])/i.test(note);
 
 const parseWeekdayToJsDay = (raw: string): number | null => {
   const value = normalizeHeader(raw);
@@ -115,12 +203,12 @@ const getMonthDaysFromIsDayOff = async (year: number, monthIndex: number): Promi
 const getMonthDays = async (year: number, monthIndex: number, useProductionCalendar: boolean) =>
   useProductionCalendar ? getMonthDaysFromIsDayOff(year, monthIndex) : getWeekdaysOnlyDays(year, monthIndex);
 
-const fetchDispatcherRows = async (): Promise<DispatcherSourceRow[]> => {
+const fetchDispatcherRows = async (sheetName: string): Promise<DispatcherSourceRow[]> => {
   const directUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
-    GOOGLE_SHEET_TAB
+    sheetName
   )}&tqx=out:json`;
   const proxiedUrl = `/google-sheets/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
-    GOOGLE_SHEET_TAB
+    sheetName
   )}&tqx=out:json`;
 
   const tryFetch = async (url: string) => {
@@ -270,15 +358,19 @@ const removeNightRowExceptMonday = (
   }
 };
 
-const removeEmptyCarrierRows = (ws: ExcelJS.Worksheet, startRow: number, endRow: number): void => {
-  const gCol = colToNumber("G");
-  const hCol = colToNumber("H");
+const removeEmptyCarrierRows = (
+  ws: ExcelJS.Worksheet,
+  startRow: number,
+  endRow: number,
+  markerCol: number,
+  valuesStartCol: number
+): void => {
   const markerNames = ["деловые линии", "байкал сервис", "пэк"];
   for (let r = endRow; r >= startRow; r--) {
-    const marker = normalizeHeader(ws.getCell(r, gCol).value);
+    const marker = normalizeHeader(ws.getCell(r, markerCol).value);
     if (!markerNames.some((name) => marker.includes(name))) continue;
     let hasValuesFromH = false;
-    for (let c = hCol; c <= Math.max(ws.columnCount, hCol); c++) {
+    for (let c = valuesStartCol; c <= Math.max(ws.columnCount, valuesStartCol); c++) {
       const v = ws.getCell(r, c).value;
       if (v === null || v === undefined) continue;
       if (String(v).trim() === "") continue;
@@ -286,6 +378,24 @@ const removeEmptyCarrierRows = (ws: ExcelJS.Worksheet, startRow: number, endRow:
       break;
     }
     if (!hasValuesFromH) ws.spliceRows(r, 1);
+  }
+};
+
+const applyFillToColumnEIntervalRows = (
+  ws: ExcelJS.Worksheet,
+  startRow: number,
+  endRow: number,
+  openCol: number,
+  closeCol: number,
+  fillTemplate: ExcelJS.Fill | null
+): void => {
+  if (!fillTemplate) return;
+  const eCol = colToNumber("E");
+  for (let r = startRow; r <= endRow; r++) {
+    const open = normalizeTime(ws.getCell(r, openCol).value);
+    const close = normalizeTime(ws.getCell(r, closeCol).value);
+    if (open === "" && close === "") continue;
+    ws.getCell(r, eCol).fill = JSON.parse(JSON.stringify(fillTemplate));
   }
 };
 
@@ -393,15 +503,24 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
   let r = fromRow;
   while (r <= ws.rowCount) {
     const gText = normalizeHeader(ws.getCell(r, gCol).value);
-    if (!gText.includes("деловые линии")) {
+    const isDl = gText.includes("деловые линии");
+    if (!isDl) {
       r++;
       continue;
     }
     let end = r;
     while (end + 1 <= ws.rowCount) {
       const next = normalizeHeader(ws.getCell(end + 1, gCol).value);
-      if (!next.includes("деловые линии")) break;
-      end++;
+      if (next.includes("деловые линии")) {
+        end++;
+        continue;
+      }
+      // В шаблонах "Деловые Линии" часто объединены на 2 строки.
+      // Если после преобразований вторая строка стала пустой — восстанавливаем merge-пару.
+      if (end === r && next === "") {
+        end++;
+      }
+      break;
     }
     if (end > r) {
       for (let rr = r + 1; rr <= end; rr++) ws.getCell(rr, gCol).value = null;
@@ -441,7 +560,7 @@ const writeSupplierCell = (ws: ExcelJS.Worksheet, rowNumber: number, colNumber: 
 };
 
 const createDispatcherWindowsBlob = async (
-  sourceRows: DispatcherSourceRow[],
+  sourceRowsBySheet: Record<string, DispatcherSourceRow[]>,
   year: number,
   monthIndex: number,
   useProductionCalendar: boolean
@@ -452,19 +571,28 @@ const createDispatcherWindowsBlob = async (
 
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await response.arrayBuffer());
+  const tverReferenceFill =
+    wb.getWorksheet("Тверь")?.getCell(2, colToNumber("E")).fill ?? null;
   const days = await getMonthDays(year, monthIndex, useProductionCalendar);
   if (days.length === 0) throw new Error("Для выбранного периода нет дат для заполнения.");
 
-  const rowsByWeekday = new Map<number, DispatcherSourceRow[]>();
-  for (const row of sourceRows) {
-    const jsDay = parseWeekdayToJsDay(row.weekday);
-    if (jsDay === null) continue;
-    const list = rowsByWeekday.get(jsDay);
-    if (list) list.push(row);
-    else rowsByWeekday.set(jsDay, [row]);
-  }
-
   for (const ws of wb.worksheets) {
+    const wsNameNorm = normalizeNameForMatch(ws.name);
+    const sheetConfig = SHEET_RULES_BY_PRIORITY.find((cfg) =>
+      wsNameNorm.includes(normalizeNameForMatch(cfg.sheetName))
+    );
+    if (!sheetConfig) continue;
+    const sourceRows = sourceRowsBySheet[sheetConfig.sourceSheetName ?? sheetConfig.sheetName] ?? [];
+
+    const rowsByWeekday = new Map<number, DispatcherSourceRow[]>();
+    for (const row of sourceRows) {
+      const jsDay = parseWeekdayToJsDay(row.weekday);
+      if (jsDay === null) continue;
+      const list = rowsByWeekday.get(jsDay);
+      if (list) list.push(row);
+      else rowsByWeekday.set(jsDay, [row]);
+    }
+
     const found = findDateAndWeekdayColumnsAndHeaderRow(ws);
     if (!found) continue;
     const openCol = findHeaderColumnInRow(ws, found.headerRow, "время откр окна");
@@ -472,6 +600,14 @@ const createDispatcherWindowsBlob = async (
     if (!openCol || !closeCol) throw new Error("В шаблоне не найдены столбцы 'Время откр окна' и 'Время закр окна'.");
 
     const fromRow = found.headerRow + 1;
+    const peremerkiFillTemplate =
+      sheetConfig.fillMode === "columnEOnly"
+        ? JSON.parse(
+            JSON.stringify(
+              tverReferenceFill ?? ws.getCell(fromRow, colToNumber("E")).fill ?? null
+            )
+          )
+        : null;
     const toRow = Math.max(ws.rowCount, fromRow + days.length * 12 + 24);
     const blockStarts = findBlockStartsByMerges(ws, found.dateCol, fromRow, toRow);
     if (blockStarts.length === 0) continue;
@@ -485,6 +621,7 @@ const createDispatcherWindowsBlob = async (
       if (found.weekdayCol) ws.getCell(blockStart, found.weekdayCol).value = formatWeekdayRu(day);
 
       const dayRows = rowsByWeekday.get(day.getDay()) || [];
+      const isEvenWeek = getIsoWeekNumber(day) % 2 === 0;
       const dlCounters = new Map<number, number>();
       for (const src of dayRows) {
         const supplier = src.shortName.trim();
@@ -492,6 +629,21 @@ const createDispatcherWindowsBlob = async (
         const intervalFrom = normalizeTime(src.timeFrom);
         const intervalTo = normalizeTime(src.timeTo);
         const note = normalizeHeader(src.note);
+
+        if (
+          sheetConfig.onlyNoteMarkers &&
+          !sheetConfig.onlyNoteMarkers.some((marker) => note.includes(normalizeHeader(marker)))
+        ) {
+          continue;
+        }
+
+        if (sheetConfig.skipNoteMarkers?.some((marker) => note.includes(normalizeHeader(marker)))) {
+          continue;
+        }
+
+        // НЧ -> только нечетная неделя, Ч -> только четная неделя.
+        if (hasWeekMarkNch(note) && isEvenWeek) continue;
+        if (!hasWeekMarkNch(note) && hasWeekMarkCh(note) && !isEvenWeek) continue;
 
         let intervalRow: number | null = null;
         for (let r = blockStart; r <= blockEnd; r++) {
@@ -504,17 +656,49 @@ const createDispatcherWindowsBlob = async (
         }
         if (!intervalRow) continue;
 
+        if (sheetConfig.fillMode === "columnEOnly") {
+          const targetCol = colToNumber("E");
+          const existing = String(ws.getCell(intervalRow, targetCol).value ?? "").trim();
+          if (!existing) {
+            writeSupplierCell(ws, intervalRow, targetCol, supplier);
+          } else if (!existing.includes(supplier)) {
+            writeSupplierCell(ws, intervalRow, targetCol, `${existing}; ${supplier}`);
+          }
+          if (peremerkiFillTemplate) {
+            ws.getCell(intervalRow, targetCol).fill = JSON.parse(JSON.stringify(peremerkiFillTemplate));
+          }
+          continue;
+        }
+
+        const kppStartCol = colToNumber(sheetConfig.kppStartCol ?? "E");
+        const kppEndCol = colToNumber(sheetConfig.kppEndCol ?? "F");
+        const defaultStartCol = colToNumber(sheetConfig.defaultStartCol ?? "G");
+        const markerCol = colToNumber(sheetConfig.markerCol ?? "G");
+        const dlStartColCfg = colToNumber(sheetConfig.dlStartCol ?? "H");
+        const markerWriteStartCol = Math.max(defaultStartCol, markerCol + 1);
+
         if (note.includes("кпп")) {
-          const targetCol = findFirstEmptyInRow(ws, intervalRow, colToNumber("E"));
-          writeSupplierCell(ws, intervalRow, targetCol, supplier);
+          const targetCol = findFirstEmptyInRow(ws, intervalRow, kppStartCol);
+          if (targetCol <= kppEndCol) {
+            writeSupplierCell(ws, intervalRow, targetCol, supplier);
+          }
           continue;
         }
 
         if (note.includes("дл") || note.includes("бс") || note.includes("пэк")) {
           const marker = note.includes("дл") ? "деловые линии" : note.includes("бс") ? "байкал сервис" : "пэк";
+
+          if (
+            (note.includes("дл") && sheetConfig.dlInterval && `${intervalFrom}-${intervalTo}` !== sheetConfig.dlInterval) ||
+            (note.includes("бс") && sheetConfig.bsInterval && `${intervalFrom}-${intervalTo}` !== sheetConfig.bsInterval) ||
+            (note.includes("пэк") && sheetConfig.pekInterval && `${intervalFrom}-${intervalTo}` !== sheetConfig.pekInterval)
+          ) {
+            continue;
+          }
+
           let markerRow: number | null = null;
           for (let r = blockStart; r <= blockEnd; r++) {
-            const gText = normalizeHeader(ws.getCell(r, colToNumber("G")).value);
+            const gText = normalizeHeader(ws.getCell(r, markerCol).value);
             if (gText.includes(marker)) {
               markerRow = r;
               break;
@@ -523,7 +707,7 @@ const createDispatcherWindowsBlob = async (
           if (!markerRow) continue;
 
           if (note.includes("дл")) {
-            const dlStartCol = colToNumber("H");
+            const dlStartCol = Math.max(dlStartColCfg, markerCol + 1);
             const current = dlCounters.get(markerRow) ?? 0;
             const firstRowLimit = 10;
             const targetRow = current < firstRowLimit ? markerRow : markerRow + 1;
@@ -533,12 +717,12 @@ const createDispatcherWindowsBlob = async (
             continue;
           }
 
-          const targetCol = findFirstEmptyInRow(ws, markerRow, colToNumber("H"));
+          const targetCol = findFirstEmptyInRow(ws, markerRow, markerWriteStartCol);
           writeSupplierCell(ws, markerRow, targetCol, supplier);
           continue;
         }
 
-        const targetCol = findFirstEmptyInRow(ws, intervalRow, colToNumber("G"));
+        const targetCol = findFirstEmptyInRow(ws, intervalRow, defaultStartCol);
         writeSupplierCell(ws, intervalRow, targetCol, supplier);
       }
     }
@@ -547,8 +731,22 @@ const createDispatcherWindowsBlob = async (
     if (!lastFilledDateRow) continue;
     const lastRowToKeep = getMergedBlockEndRow(ws, lastFilledDateRow, found.dateCol);
     hardTrimWorksheetBottom(ws, lastRowToKeep);
-    removeNightRowExceptMonday(ws, fromRow, lastRowToKeep, found.weekdayCol, openCol, closeCol);
-    removeEmptyCarrierRows(ws, fromRow, Math.min(lastRowToKeep, ws.rowCount));
+    if (sheetConfig.fillMode === "columnEOnly") {
+      applyFillToColumnEIntervalRows(
+        ws,
+        fromRow,
+        Math.min(lastRowToKeep, ws.rowCount),
+        openCol,
+        closeCol,
+        peremerkiFillTemplate
+      );
+    }
+    if (sheetConfig.removeNightRowExceptMonday) {
+      removeNightRowExceptMonday(ws, fromRow, lastRowToKeep, found.weekdayCol, openCol, closeCol);
+    }
+    const markerCol = colToNumber(sheetConfig.markerCol ?? "G");
+    const valuesStartCol = Math.max(colToNumber(sheetConfig.defaultStartCol ?? "G"), markerCol + 1);
+    removeEmptyCarrierRows(ws, fromRow, Math.min(lastRowToKeep, ws.rowCount), markerCol, valuesStartCol);
     restoreDateWeekdayMerges(ws, found.dateCol, found.weekdayCol, fromRow, openCol, closeCol);
     restoreCarrierColumnGMerges(ws, fromRow);
     ws.views = [{ state: "normal", activeCell: "A1" } as ExcelJS.WorksheetView];
@@ -563,6 +761,12 @@ export const buildDispatcherWindowsBlob = async (
   monthIndex: number,
   useProductionCalendar: boolean
 ): Promise<Blob> => {
-  const sourceRows = await fetchDispatcherRows();
-  return createDispatcherWindowsBlob(sourceRows, year, monthIndex, useProductionCalendar);
+  const sourceRowsBySheet: Record<string, DispatcherSourceRow[]> = {};
+  const sourceSheetNames = Array.from(
+    new Set(SHEET_RULES.map((cfg) => cfg.sourceSheetName ?? cfg.sheetName))
+  );
+  for (const sheetName of sourceSheetNames) {
+    sourceRowsBySheet[sheetName] = await fetchDispatcherRows(sheetName);
+  }
+  return createDispatcherWindowsBlob(sourceRowsBySheet, year, monthIndex, useProductionCalendar);
 };
