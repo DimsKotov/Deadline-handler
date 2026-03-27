@@ -552,6 +552,19 @@ const findFirstEmptyInRow = (ws: ExcelJS.Worksheet, rowNumber: number, startCol:
   return col;
 };
 
+const findFirstEmptyInRange = (
+  ws: ExcelJS.Worksheet,
+  rowNumber: number,
+  fromCol: number,
+  toCol: number
+): number | null => {
+  for (let col = fromCol; col <= toCol; col++) {
+    const v = ws.getCell(rowNumber, col).value;
+    if (v === null || v === undefined || String(v).trim() === "") return col;
+  }
+  return null;
+};
+
 const writeSupplierCell = (ws: ExcelJS.Worksheet, rowNumber: number, colNumber: number, value: string): void => {
   const cell = ws.getCell(rowNumber, colNumber);
   cell.value = value.replace(/_/g, " ");
@@ -622,7 +635,6 @@ const createDispatcherWindowsBlob = async (
 
       const dayRows = rowsByWeekday.get(day.getDay()) || [];
       const isEvenWeek = getIsoWeekNumber(day) % 2 === 0;
-      const dlCounters = new Map<number, number>();
       for (const src of dayRows) {
         const supplier = src.shortName.trim();
         if (!supplier) continue;
@@ -708,12 +720,15 @@ const createDispatcherWindowsBlob = async (
 
           if (note.includes("дл")) {
             const dlStartCol = Math.max(dlStartColCfg, markerCol + 1);
-            const current = dlCounters.get(markerRow) ?? 0;
             const firstRowLimit = 10;
-            const targetRow = current < firstRowLimit ? markerRow : markerRow + 1;
-            const targetCol = current < firstRowLimit ? dlStartCol + current : dlStartCol + (current - firstRowLimit);
-            writeSupplierCell(ws, targetRow, targetCol, supplier);
-            dlCounters.set(markerRow, current + 1);
+            const firstRowEndCol = dlStartCol + firstRowLimit - 1;
+            const firstRowCol = findFirstEmptyInRange(ws, markerRow, dlStartCol, firstRowEndCol);
+            if (firstRowCol !== null) {
+              writeSupplierCell(ws, markerRow, firstRowCol, supplier);
+            } else {
+              const targetCol = findFirstEmptyInRow(ws, markerRow + 1, dlStartCol);
+              writeSupplierCell(ws, markerRow + 1, targetCol, supplier);
+            }
             continue;
           }
 
