@@ -767,6 +767,13 @@ const createDispatcherWindowsBlob = async (
     ws.views = [{ state: "normal", activeCell: "A1" } as ExcelJS.WorksheetView];
   }
 
+  const tverSheetIndex = wb.worksheets.findIndex(
+    (ws) => normalizeNameForMatch(ws.name) === normalizeNameForMatch("Тверь")
+  );
+  if (tverSheetIndex >= 0) {
+    wb.views = [{ activeTab: tverSheetIndex, firstSheet: tverSheetIndex } as unknown as ExcelJS.WorkbookView];
+  }
+
   const out = await wb.xlsx.writeBuffer();
   return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 };
