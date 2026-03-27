@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ExcelJS from "exceljs";
 import { downloadBlob } from "../../../utils/ExcelUtils";
 import Loader from "../../../features/Loader/Loader";
-import Holidays from "date-holidays";
 import styles from "./ControlGraphFormationPage.module.css";
 
 const monthNames = [
@@ -45,8 +44,6 @@ const GOOGLE_SHEET_TABS = [
   "Сибирь",
 ] as const;
 
-const ruHolidays = new Holidays("RU");
-
 const normalizeHeader = (v: unknown): string =>
   String(v ?? "")
     .trim()
@@ -78,6 +75,61 @@ const addDays = (date: Date, days: number): Date => {
   const dt = new Date(date);
   dt.setDate(dt.getDate() + days);
   return dt;
+};
+
+const getWeekdaysOnlyDays = (year: number, monthIndex: number): Date[] => {
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex + 1, 0);
+  const days: Date[] = [];
+
+  for (let dt = new Date(monthStart); dt <= monthEnd; dt = addDays(dt, 1)) {
+    const weekend = dt.getDay() === 0 || dt.getDay() === 6;
+    if (weekend) continue;
+    days.push(new Date(dt));
+  }
+
+  return days;
+};
+
+const getMonthDaysFromIsDayOff = async (year: number, monthIndex: number): Promise<Date[]> => {
+  const month = String(monthIndex + 1).padStart(2, "0");
+  const url = `https://isdayoff.ru/api/getdata?year=${year}&month=${month}&cc=ru`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`isDayOff вернул status=${response.status}.`);
+  }
+
+  const raw = (await response.text()).trim();
+  const codes = raw.replace(/\s+/g, "");
+  if (!codes || /[^0-9]/.test(codes)) {
+    throw new Error("Некорректный ответ isDayOff.");
+  }
+
+  const monthDaysCount = new Date(year, monthIndex + 1, 0).getDate();
+  if (codes.length < monthDaysCount) {
+    throw new Error("isDayOff вернул неполные данные за месяц.");
+  }
+
+  const days: Date[] = [];
+  for (let i = 0; i < monthDaysCount; i++) {
+    const code = codes[i];
+    if (code === "0" || code === "2") {
+      days.push(new Date(year, monthIndex, i + 1));
+    }
+  }
+
+  return days;
+};
+
+const getMonthDays = async (
+  year: number,
+  monthIndex: number,
+  useProductionCalendar: boolean
+): Promise<Date[]> => {
+  if (!useProductionCalendar) {
+    return getWeekdaysOnlyDays(year, monthIndex);
+  }
+  return getMonthDaysFromIsDayOff(year, monthIndex);
 };
 
 const fetchSheetRows = async (sheetName: string): Promise<ControlGraphRow[]> => {
@@ -267,8 +319,7 @@ const createControlGraphBlobFromTemplate = async (
   const outWb = new ExcelJS.Workbook();
   const outWs = outWb.addWorksheet(ws.name);
 
-  const monthStart = new Date(year, monthIndex, 1);
-  const monthEnd = new Date(year, monthIndex + 1, 0); // последний день месяца
+  const monthDays = await getMonthDays(year, monthIndex, useProductionCalendar);
 
   const colsArr = Array.from(colMap.values());
   const minCol = Math.min(...colsArr);
@@ -308,17 +359,7 @@ const createControlGraphBlobFromTemplate = async (
       else rowsByJsDay.set(jsDay, [row]);
     }
 
-    // Важно: используем отдельную переменную dt, не переиспользуем monthStart/monthEnd.
-    for (let dt = new Date(monthStart); dt <= monthEnd; dt = addDays(dt, 1)) {
-      if (useProductionCalendar) {
-        const dayOfWeek = dt.getDay(); // 0..6
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        if (isWeekend) continue;
-        // date-holidays возвращает список праздников/нерабочих дней
-        const holidays = ruHolidays.isHoliday(dt);
-        if (holidays && holidays.length > 0) continue;
-      }
-
+    for (const dt of monthDays) {
       const jsDay = dt.getDay(); // 0..6 (воскресенье..суббота)
       const dayRows = rowsByJsDay.get(jsDay) || [];
 
@@ -453,6 +494,8 @@ export default function ControlGraphFormationPage() {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0-based
+  const nextMonth = (currentMonth + 1) % 12;
+  const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear;
 
   // Делаем список лет небольшой "полкой".
   const years = useMemo(() => {
@@ -463,8 +506,8 @@ export default function ControlGraphFormationPage() {
     return out;
   }, [currentYear]);
 
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
+  const [selectedYear, setSelectedYear] = useState<number>(nextMonthYear);
+  const [selectedMonth, setSelectedMonth] = useState<number>(nextMonth);
   const [isGenerating, setIsGenerating] = useState(false);
   const [localError, setLocalError] = useState<string>("");
   const [useProductionCalendar, setUseProductionCalendar] = useState<boolean>(true);

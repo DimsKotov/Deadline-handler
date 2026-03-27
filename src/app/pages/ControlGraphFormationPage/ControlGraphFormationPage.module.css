@@ -71,7 +71,7 @@
 }
 
 .uploadButton {
-  min-width: 320px;
+  width: 520px;
   min-height: 80px;
   padding: 10px 25px;
   font-size: 26px;
