@@ -274,7 +274,7 @@ const findDateAndWeekdayColumnsAndHeaderRow = (
 ): { dateCol: number; weekdayCol: number | null; headerRow: number } | null => {
   const maxScanRow = Math.min(Math.max(ws.rowCount, 30), 100);
   for (let r = 1; r <= maxScanRow; r++) {
-    const row = ws.getRow(r);
+    const row = ws.getRow(r)
     let dateCol = 0;
     let weekdayCol = 0;
     row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
