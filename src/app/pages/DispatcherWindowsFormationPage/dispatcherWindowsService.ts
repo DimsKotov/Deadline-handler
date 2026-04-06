@@ -243,40 +243,60 @@ const getMonthDays = async (year: number, monthIndex: number, useProductionCalen
         (_v, i) => new Date(year, monthIndex, i + 1)
       );
 
-const fetchDispatcherRows = async (sheetName: string): Promise<DispatcherSourceRow[]> => {
-  const directUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
-    sheetName
-  )}&tqx=out:json`;
-  const proxiedUrl = `/google-sheets/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
-    sheetName
-  )}&tqx=out:json`;
+const parseCsvTable = (csvText: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
 
-  const tryFetch = async (url: string) => {
-    try {
-      return await fetch(url);
-    } catch {
-      return null;
+  for (let i = 0; i < csvText.length; i++) {
+    const ch = csvText[i];
+
+    if (inQuotes) {
+      if (ch === "\"") {
+        if (csvText[i + 1] === "\"") {
+          cell += "\"";
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+      continue;
     }
-  };
 
-  let response: Response | null = null;
-  if (import.meta.env.DEV) response = await tryFetch(proxiedUrl);
-  if (!response || !response.ok) response = await tryFetch(directUrl);
-  if (!response) throw new Error("Не удалось получить данные Google Sheet.");
-  if (!response.ok) throw new Error(`Не удалось получить данные Google Sheet (status=${response.status}).`);
+    if (ch === "\"") {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === ",") {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if (ch === "\r") continue;
+    if (ch === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += ch;
+  }
 
-  const text = await response.text();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end < 0 || end <= start) throw new Error("Некорректный ответ Google Sheet API");
+  row.push(cell);
+  // Не добавляем полностью пустую финальную строку.
+  if (row.some((v) => v !== "") || rows.length === 0) rows.push(row);
+  return rows;
+};
 
-  const json = JSON.parse(text.slice(start, end + 1));
-  const table = json?.table;
-  const cols: Array<{ label?: string }> = table?.cols ?? [];
-  const rows: Array<{ c?: Array<{ v?: unknown; f?: string } | null> }> = table?.rows ?? [];
-  const labels = cols.map((c) => normalizeHeader(c?.label ?? ""));
+const mapDispatcherRowsFromTable = (table: string[][]): DispatcherSourceRow[] => {
+  if (!table.length) return [];
+  const headers = table[0].map((h) => normalizeHeader(h));
   const findCol = (keyword: string): number | undefined => {
-    const idx = labels.findIndex((x) => x.includes(normalizeHeader(keyword)));
+    const idx = headers.findIndex((x) => x.includes(normalizeHeader(keyword)));
     return idx >= 0 ? idx : undefined;
   };
 
@@ -289,24 +309,77 @@ const fetchDispatcherRows = async (sheetName: string): Promise<DispatcherSourceR
     throw new Error("В Google Sheet не найдены столбцы: День недели/Время с/Время по/Сокращенное название.");
   }
 
-  const getText = (row: { c?: Array<{ v?: unknown; f?: string } | null> }, idx: number | undefined): string => {
-    if (idx === undefined) return "";
-    const cell = row.c?.[idx];
-    if (!cell) return "";
-    return String(cell.f ?? cell.v ?? "").trim();
-  };
-
   const out: DispatcherSourceRow[] = [];
-  for (const row of rows) {
-    const weekday = getText(row, weekdayCol);
-    const timeFrom = normalizeTime(getText(row, timeFromCol));
-    const timeTo = normalizeTime(getText(row, timeToCol));
-    const shortName = getText(row, shortNameCol);
-    const note = getText(row, noteCol);
+  for (let r = 1; r < table.length; r++) {
+    const row = table[r] ?? [];
+    const weekday = String(row[weekdayCol] ?? "").trim();
+    const timeFrom = normalizeTime(String(row[timeFromCol] ?? "").trim());
+    const timeTo = normalizeTime(String(row[timeToCol] ?? "").trim());
+    const shortName = String(row[shortNameCol] ?? "").trim();
+    const note = noteCol === undefined ? "" : String(row[noteCol] ?? "").trim();
     if (!weekday || !shortName) continue;
     out.push({ weekday, timeFrom, timeTo, shortName, note });
   }
   return out;
+};
+
+const fetchDispatcherRows = async (sheetName: string): Promise<DispatcherSourceRow[]> => {
+  const directUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+    sheetName
+  )}&tqx=out:json`;
+  const directCsvUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+    sheetName
+  )}&tq=${encodeURIComponent("select *")}&tqx=out:csv`;
+  const proxiedUrl = `/google-sheets/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+    sheetName
+  )}&tqx=out:json`;
+  const proxiedCsvUrl = `/google-sheets/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
+    sheetName
+  )}&tq=${encodeURIComponent("select *")}&tqx=out:csv`;
+
+  const tryFetch = async (url: string) => {
+    try {
+      return await fetch(url);
+    } catch {
+      return null;
+    }
+  };
+
+  // Сначала пытаемся читать CSV-выгрузку "сырых" данных (обычно не зависит от UI-фильтров листа).
+  let csvResponse: Response | null = null;
+  if (import.meta.env.DEV) csvResponse = await tryFetch(proxiedCsvUrl);
+  if (!csvResponse || !csvResponse.ok) csvResponse = await tryFetch(directCsvUrl);
+  if (csvResponse && csvResponse.ok) {
+    const csvText = await csvResponse.text();
+    const csvTable = parseCsvTable(csvText);
+    if (csvTable.length > 1) {
+      return mapDispatcherRowsFromTable(csvTable);
+    }
+  }
+
+  // Fallback: старый JSON-путь.
+  let response: Response | null = null;
+  if (import.meta.env.DEV) response = await tryFetch(proxiedUrl);
+  if (!response || !response.ok) response = await tryFetch(directUrl);
+  if (!response) throw new Error("Не удалось получить данные Google Sheet.");
+  if (!response.ok) throw new Error(`Не удалось получить данные Google Sheet (status=${response.status}).`);
+
+  const text = await response.text();
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < 0 || end <= start) throw new Error("Некорректный ответ Google Sheet API");
+  const json = JSON.parse(text.slice(start, end + 1));
+  const table = json?.table;
+  const cols: Array<{ label?: string }> = table?.cols ?? [];
+  const rows: Array<{ c?: Array<{ v?: unknown; f?: string } | null> }> = table?.rows ?? [];
+
+  const rawTable: string[][] = [];
+  rawTable.push(cols.map((c) => String(c?.label ?? "")));
+  for (const row of rows) {
+    const cells = row.c ?? [];
+    rawTable.push(cells.map((cell) => String(cell?.f ?? cell?.v ?? "")));
+  }
+  return mapDispatcherRowsFromTable(rawTable);
 };
 
 const findDateAndWeekdayColumnsAndHeaderRow = (
