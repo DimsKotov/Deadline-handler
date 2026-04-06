@@ -258,6 +258,16 @@ const fetchSheetRows = async (sheetName: string): Promise<ControlGraphRow[]> => 
     const supplier = getCellText(row, supplierCol);
     const weekday = getCellText(row, weekdayCol);
 
+    const supplierNorm = normalizeHeader(supplier);
+    const excludedMarkers = [
+      "перемещение с цс тверь",
+      "перемещение с цс екатеринбург",
+    ];
+    // Исключаем строки только по столбцу "Поставщик".
+    if (excludedMarkers.some((marker) => supplierNorm.includes(marker))) {
+      continue;
+    }
+
     const hasAny = [cs, timeFrom, timeTo, supplier, weekday].some((v) => !!v);
     if (!hasAny) continue;
 

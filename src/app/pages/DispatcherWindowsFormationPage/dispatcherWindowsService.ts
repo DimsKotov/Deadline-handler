@@ -163,23 +163,6 @@ const colToNumber = (col: string): number =>
     .split("")
     .reduce((acc, ch) => acc * 26 + (ch.charCodeAt(0) - 64), 0);
 
-const addDays = (date: Date, days: number): Date => {
-  const dt = new Date(date);
-  dt.setDate(dt.getDate() + days);
-  return dt;
-};
-
-const getWeekdaysOnlyDays = (year: number, monthIndex: number): Date[] => {
-  const monthStart = new Date(year, monthIndex, 1);
-  const monthEnd = new Date(year, monthIndex + 1, 0);
-  const days: Date[] = [];
-  for (let dt = new Date(monthStart); dt <= monthEnd; dt = addDays(dt, 1)) {
-    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
-    days.push(new Date(dt));
-  }
-  return days;
-};
-
 const getMonthDaysFromIsDayOff = async (year: number, monthIndex: number): Promise<Date[]> => {
   const month = String(monthIndex + 1).padStart(2, "0");
   const url = `https://isdayoff.ru/api/getdata?year=${year}&month=${month}&cc=ru`;
@@ -200,8 +183,65 @@ const getMonthDaysFromIsDayOff = async (year: number, monthIndex: number): Promi
   return days;
 };
 
+const getHolidayPeriodDayNumbersFromIsDayOff = async (year: number, monthIndex: number): Promise<Set<number>> => {
+  const month = String(monthIndex + 1).padStart(2, "0");
+  const url = `https://isdayoff.ru/api/getdata?year=${year}&month=${month}&cc=ru&holiday=1`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`isDayOff(holidays) вернул status=${response.status}.`);
+
+  const raw = (await response.text()).trim();
+  const codes = raw.replace(/\s+/g, "");
+  if (!codes || /[^0-9]/.test(codes)) throw new Error("Некорректный ответ isDayOff(holidays).");
+
+  const monthDaysCount = new Date(year, monthIndex + 1, 0).getDate();
+  if (codes.length < monthDaysCount) throw new Error("isDayOff(holidays) вернул неполные данные за месяц.");
+
+  // В режиме holiday=1 коды:
+  // 0 - рабочий, 1 - нерабочий, 8 - праздничный.
+  // Для наших правил нужно исключать весь "праздничный период":
+  // непрерывный отрезок нерабочих дней, если в нем есть хотя бы один день с кодом 8.
+  const holidayPeriodDays = new Set<number>();
+  let segmentStart = -1;
+  let segmentHasHoliday8 = false;
+
+  const flushSegment = (segmentEndIdx: number) => {
+    if (segmentStart < 0) return;
+    if (segmentHasHoliday8) {
+      for (let idx = segmentStart; idx <= segmentEndIdx; idx++) {
+        holidayPeriodDays.add(idx + 1);
+      }
+    }
+    segmentStart = -1;
+    segmentHasHoliday8 = false;
+  };
+
+  for (let i = 0; i < monthDaysCount; i++) {
+    const code = Number(codes[i]);
+    const isNonWorking = code !== 0;
+    const isHoliday8 = (code & 8) === 8;
+
+    if (isNonWorking) {
+      if (segmentStart < 0) segmentStart = i;
+      if (isHoliday8) segmentHasHoliday8 = true;
+      continue;
+    }
+
+    flushSegment(i - 1);
+  }
+  flushSegment(monthDaysCount - 1);
+
+  return holidayPeriodDays;
+};
+
 const getMonthDays = async (year: number, monthIndex: number, useProductionCalendar: boolean) =>
-  useProductionCalendar ? getMonthDaysFromIsDayOff(year, monthIndex) : getWeekdaysOnlyDays(year, monthIndex);
+  useProductionCalendar
+    ? getMonthDaysFromIsDayOff(year, monthIndex)
+    : // Без производственного календаря используем все календарные дни месяца (включая выходные),
+      // чтобы формировались окна и для субботы/воскресенья.
+      Array.from(
+        { length: new Date(year, monthIndex + 1, 0).getDate() },
+        (_v, i) => new Date(year, monthIndex, i + 1)
+      );
 
 const fetchDispatcherRows = async (sheetName: string): Promise<DispatcherSourceRow[]> => {
   const directUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(
@@ -587,6 +627,9 @@ const createDispatcherWindowsBlob = async (
   const tverReferenceFill =
     wb.getWorksheet("Тверь")?.getCell(2, colToNumber("E")).fill ?? null;
   const days = await getMonthDays(year, monthIndex, useProductionCalendar);
+  const holidayPeriodDayNumbers = useProductionCalendar
+    ? await getHolidayPeriodDayNumbersFromIsDayOff(year, monthIndex)
+    : new Set<number>();
   if (days.length === 0) throw new Error("Для выбранного периода нет дат для заполнения.");
 
   for (const ws of wb.worksheets) {
@@ -625,9 +668,35 @@ const createDispatcherWindowsBlob = async (
     const blockStarts = findBlockStartsByMerges(ws, found.dateCol, fromRow, toRow);
     if (blockStarts.length === 0) continue;
 
-    const filledBlocksCount = Math.min(days.length, blockStarts.length);
+    const hasSaturdayRows = (rowsByWeekday.get(6)?.length ?? 0) > 0;
+    const hasSundayRows = (rowsByWeekday.get(0)?.length ?? 0) > 0;
+    let effectiveDays = days.filter((day) => {
+      if (day.getDay() === 6 && !hasSaturdayRows) return false;
+      if (day.getDay() === 0 && !hasSundayRows) return false;
+      return true;
+    });
+    // При включенном производственном календаре isdayoff обычно не возвращает выходные.
+    // Но если в Google Sheet есть строки на субботу/воскресенье, добавляем эти даты месяца.
+    if (useProductionCalendar && (hasSaturdayRows || hasSundayRows)) {
+      const seen = new Set(effectiveDays.map((d) => d.getDate()));
+      const monthDaysCount = new Date(year, monthIndex + 1, 0).getDate();
+      for (let dayNum = 1; dayNum <= monthDaysCount; dayNum++) {
+        const dt = new Date(year, monthIndex, dayNum);
+        const dow = dt.getDay();
+        const needSaturday = dow === 6 && hasSaturdayRows;
+        const needSunday = dow === 0 && hasSundayRows;
+        const isHolidayPeriodDay = holidayPeriodDayNumbers.has(dayNum);
+        if ((needSaturday || needSunday) && !isHolidayPeriodDay && !seen.has(dayNum)) {
+          effectiveDays.push(dt);
+          seen.add(dayNum);
+        }
+      }
+      effectiveDays = effectiveDays.sort((a, b) => a.getTime() - b.getTime());
+    }
+
+    const filledBlocksCount = Math.min(effectiveDays.length, blockStarts.length);
     for (let i = 0; i < filledBlocksCount; i++) {
-      const day = days[i];
+      const day = effectiveDays[i];
       const blockStart = blockStarts[i];
       const blockEnd = i + 1 < blockStarts.length ? blockStarts[i + 1] - 1 : ws.rowCount;
       ws.getCell(blockStart, found.dateCol).value = formatDate(day);
