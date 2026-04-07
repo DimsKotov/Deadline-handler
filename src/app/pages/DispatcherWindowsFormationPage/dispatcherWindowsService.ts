@@ -494,6 +494,16 @@ const removeEmptyCarrierRows = (
   }
 };
 
+const hasAnyValueFromCol = (ws: ExcelJS.Worksheet, rowNumber: number, fromCol: number): boolean => {
+  for (let c = fromCol; c <= Math.max(ws.columnCount, fromCol); c++) {
+    const v = ws.getCell(rowNumber, c).value;
+    if (v === null || v === undefined) continue;
+    if (String(v).trim() === "") continue;
+    return true;
+  }
+  return false;
+};
+
 const applyFillToColumnEIntervalRows = (
   ws: ExcelJS.Worksheet,
   startRow: number,
@@ -628,8 +638,13 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
         end++;
         continue;
       }
-      // В шаблонах "Деловые Линии" часто объединены на 2 строки.
-      // Если после преобразований вторая строка стала пустой — восстанавливаем merge-пару.
+      // Если в следующей строке marker-колонка пустая, но справа есть значения,
+      // это продолжение блока Деловых Линий (2-я/3-я строка и т.д.).
+      if (next === "" && hasAnyValueFromCol(ws, end + 1, gCol + 1)) {
+        end++;
+        continue;
+      }
+      // В шаблонах "Деловые Линии" часто объединены минимум на 2 строки.
       if (end === r && next === "") {
         end++;
       }
@@ -862,14 +877,20 @@ const createDispatcherWindowsBlob = async (
 
           if (note.includes("дл")) {
             const dlStartCol = Math.max(dlStartColCfg, markerCol + 1);
-            const firstRowLimit = 10;
-            const firstRowEndCol = dlStartCol + firstRowLimit - 1;
+            const perRowLimit = 10;
+            const firstRowEndCol = dlStartCol + perRowLimit - 1;
             const firstRowCol = findFirstEmptyInRange(ws, markerRow, dlStartCol, firstRowEndCol);
             if (firstRowCol !== null) {
               writeSupplierCell(ws, markerRow, firstRowCol, supplier);
             } else {
-              const targetCol = findFirstEmptyInRow(ws, markerRow + 1, dlStartCol);
-              writeSupplierCell(ws, markerRow + 1, targetCol, supplier);
+              const secondRowEndCol = dlStartCol + perRowLimit - 1;
+              const secondRowCol = findFirstEmptyInRange(ws, markerRow + 1, dlStartCol, secondRowEndCol);
+              if (secondRowCol !== null) {
+                writeSupplierCell(ws, markerRow + 1, secondRowCol, supplier);
+              } else {
+                const targetCol = findFirstEmptyInRow(ws, markerRow + 2, dlStartCol);
+                writeSupplierCell(ws, markerRow + 2, targetCol, supplier);
+              }
             }
             continue;
           }
