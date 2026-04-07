@@ -603,8 +603,7 @@ const restoreDateWeekdayMerges = (
   }
 };
 
-const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): void => {
-  const gCol = colToNumber("G");
+const restoreCarrierMarkerMerges = (ws: ExcelJS.Worksheet, fromRow: number, markerCol: number): void => {
   const sheetModel = ws.model as ExcelJS.WorksheetModel & { merges?: string[] };
   const merges = sheetModel.merges ?? [];
   for (const mergeRef of merges) {
@@ -614,7 +613,7 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
     if (!start || !end) continue;
     const minCol = Math.min(start.col, end.col);
     const maxCol = Math.max(start.col, end.col);
-    if (gCol < minCol || gCol > maxCol) continue;
+    if (markerCol < minCol || markerCol > maxCol) continue;
     if (Math.max(start.row, end.row) < fromRow) continue;
     try {
       ws.unMergeCells(mergeRef);
@@ -625,7 +624,7 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
 
   let r = fromRow;
   while (r <= ws.rowCount) {
-    const gText = normalizeHeader(ws.getCell(r, gCol).value);
+    const gText = normalizeHeader(ws.getCell(r, markerCol).value);
     const isDl = gText.includes("деловые линии");
     if (!isDl) {
       r++;
@@ -633,14 +632,14 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
     }
     let end = r;
     while (end + 1 <= ws.rowCount) {
-      const next = normalizeHeader(ws.getCell(end + 1, gCol).value);
+      const next = normalizeHeader(ws.getCell(end + 1, markerCol).value);
       if (next.includes("деловые линии")) {
         end++;
         continue;
       }
       // Если в следующей строке marker-колонка пустая, но справа есть значения,
       // это продолжение блока Деловых Линий (2-я/3-я строка и т.д.).
-      if (next === "" && hasAnyValueFromCol(ws, end + 1, gCol + 1)) {
+      if (next === "" && hasAnyValueFromCol(ws, end + 1, markerCol + 1)) {
         end++;
         continue;
       }
@@ -651,9 +650,9 @@ const restoreCarrierColumnGMerges = (ws: ExcelJS.Worksheet, fromRow: number): vo
       break;
     }
     if (end > r) {
-      for (let rr = r + 1; rr <= end; rr++) ws.getCell(rr, gCol).value = null;
-      ws.getCell(r, gCol).value = "Деловые Линии";
-      ws.mergeCells(r, gCol, end, gCol);
+      for (let rr = r + 1; rr <= end; rr++) ws.getCell(rr, markerCol).value = null;
+      ws.getCell(r, markerCol).value = "Деловые Линии";
+      ws.mergeCells(r, markerCol, end, markerCol);
     }
     r = end + 1;
   }
@@ -926,7 +925,7 @@ const createDispatcherWindowsBlob = async (
     const valuesStartCol = Math.max(colToNumber(sheetConfig.defaultStartCol ?? "G"), markerCol + 1);
     removeEmptyCarrierRows(ws, fromRow, Math.min(lastRowToKeep, ws.rowCount), markerCol, valuesStartCol);
     restoreDateWeekdayMerges(ws, found.dateCol, found.weekdayCol, fromRow, openCol, closeCol);
-    restoreCarrierColumnGMerges(ws, fromRow);
+    restoreCarrierMarkerMerges(ws, fromRow, markerCol);
     ws.views = [{ state: "normal", activeCell: "A1" } as ExcelJS.WorksheetView];
   }
 
