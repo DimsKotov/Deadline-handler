@@ -598,7 +598,7 @@ export const buildExclusionAllData = (
   console.time("Filter and process data");
 
   const moscowCS = ["R01", "R02", "R04", "R31", "R77", "V30"];
-  const ekaterinburgCS = ["R90", "R19"];
+  const ekaterinburgCS = ["R29", "R19"];
 
   const allData: any[] = [];
   const filteredTimeData: any[] = [];
@@ -1249,5 +1249,3 @@ export const buildBettermanAllData = (
   console.log(`Betterman: сформировано ${allData.length} строк данных`);
   return allData;
 };
-
-
